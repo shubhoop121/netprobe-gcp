@@ -1,3 +1,4 @@
+
 resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
@@ -6,7 +7,7 @@ resource "random_id" "bucket_suffix" {
 resource "google_storage_bucket" "terraform_state" {
   # Bucket names must be globally unique. Appending the project ID and a random suffix is a good practice.
   name          = "netprobe-tfstate-${var.project_id}-${random_id.bucket_suffix.hex}"
-  location      = "US"
+  location      = "ASIA-SOUTH1"
   force_destroy = false
 
   # Enable versioning to keep a history of state files, which is crucial for recovery.
