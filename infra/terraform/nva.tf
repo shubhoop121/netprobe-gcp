@@ -3,8 +3,6 @@
 # Crucially, we enable can_ip_forward = true, which allows the VMs to act as routers—the key requirement 
 # for our inline inspection model.
 
-# infra/terraform/nva.tf
-
 resource "google_compute_instance_template" "nva" {
   name_prefix  = "netprobe-nva-template-"
   machine_type = "e2-medium"
