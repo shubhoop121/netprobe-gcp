@@ -1,7 +1,5 @@
 name: 'Terraform Plan'
 
-# This workflow runs on pull requests that target the 'main' branch
-# but ONLY if changes are made in the 'infra/terraform/' directory.
 on:
   pull_request:
     branches:
@@ -9,8 +7,6 @@ on:
     paths:
       - 'infra/terraform/**'
 
-# These permissions are required for the OIDC authentication and for a
-# future step where we'll have the action comment the plan on the PR.
 permissions:
   contents: read
   id-token: write
@@ -21,17 +17,14 @@ jobs:
     name: 'Terraform Plan'
     runs-on: ubuntu-latest
     
-    # All steps in this job will run in this directory
     defaults:
       run:
         working-directory: ./infra/terraform
 
     steps:
-      # Step 1: Check out the code from the repository
       - name: 'Checkout'
         uses: actions/checkout@v4
 
-      # Step 2: Authenticate to Google Cloud. This is the logic from your friend's test file.
       - name: 'Authenticate to Google Cloud'
         id: auth
         uses: 'google-github-actions/auth@v2'
@@ -39,20 +32,16 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      # Step 3: Set up the Terraform CLI
       - name: 'Set up Terraform'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.5.0'
 
-      # Step 4: Initialize Terraform. This configures the backend to use the GCS bucket.
       - name: 'Terraform Init'
-        run: terraform init -backend-config="bucket=netprobe-terraform-state-yourinitials"
+        run: terraform init
       
-      # Step 5: Validate the Terraform code for syntax errors
       - name: 'Terraform Validate'
         run: terraform validate -no-color
 
-      # Step 6: Generate the execution plan
       - name: 'Terraform Plan'
         run: terraform plan -no-color
