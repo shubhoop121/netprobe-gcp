@@ -1,5 +1,7 @@
-# infra/terraform/nva.tf
-
+# This is the heart of our system. We'll define an instance template that specifies what our analysis VMs 
+# will look like, and then a Managed Instance Group (MIG) to create and manage them.
+# Crucially, we enable can_ip_forward = true, which allows the VMs to act as routers—the key requirement 
+# for our inline inspection model.
 resource "google_compute_instance_template" "nva" {
   name_prefix  = "netprobe-nva-template-"
   machine_type = "e2-medium"
@@ -45,7 +47,6 @@ resource "google_compute_region_instance_group_manager" "nva" {
   target_size        = 2
 
   auto_healing_policies {
-    # CORRECTED: This now references the correct regional health check resource type
     health_check      = google_compute_region_health_check.nva.id
     initial_delay_sec = 300
   }
