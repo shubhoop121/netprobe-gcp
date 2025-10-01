@@ -24,7 +24,7 @@ jobs:
     # All steps in this job will run in this directory
     defaults:
       run:
-        working-directory:./infra/terraform
+        working-directory: ./infra/terraform
 
     steps:
       # Step 1: Check out the code from the repository
