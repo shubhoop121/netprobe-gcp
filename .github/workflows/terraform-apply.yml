@@ -48,4 +48,4 @@ jobs:
       # Step 5: Apply the Terraform configuration.
       # The -auto-approve flag is essential for non-interactive CI/CD environments.
       - name: 'Terraform Apply'
-        run: terraform apply -auto-approve
+        run: terraform destroy -auto-approve
