@@ -16,7 +16,7 @@ resource "google_compute_firewall" "allow_health_checks" {
   allow {
     protocol = "tcp"
   }
-  # These are the specific IP ranges used by GCP health checkers.
+  # Specific IP ranges used by GCP health checkers.
   source_ranges = ["35.191.0.0/16", "130.211.0.0/22"]
   target_tags   = ["nva"]
 }
