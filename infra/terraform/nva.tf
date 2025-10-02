@@ -19,54 +19,46 @@ resource "google_compute_instance_template" "nva" {
     subnetwork = google_compute_subnetwork.analysis.id
   }
 
-  // This is the critical setting that allows the instance to act as a router.
   can_ip_forward = true
 
-  // This script runs when the VM first boots.
-  // It now installs and configures Zeek and Suricata.
   metadata_startup_script = <<-EOT
     #!/bin/bash
     set -e # Exit on any error
 
     # 1. System Preparation
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update
-    apt-get install -y curl gnupg2
+    # ADDED: Force apt to use IPv4
+    apt-get -o 'Acquire::ForceIPv4=true' update
+    apt-get -o 'Acquire::ForceIPv4=true' install -y curl gnupg2
 
     # 2. Install Zeek from official repository
     echo 'deb http://download.opensuse.org/repositories/security:/zeek/Debian_11/ /' > /etc/apt/sources.list.d/zeek.list
     curl -fsSL https://download.opensuse.org/repositories/security:zeek/Debian_11/Release.key | gpg --dearmor > /etc/apt/trusted.gpg.d/security_zeek.gpg
-    apt-get update
-    apt-get install -y zeek-lts
+    # ADDED: Force apt to use IPv4
+    apt-get -o 'Acquire::ForceIPv4=true' update
+    # ADDED: Force apt to use IPv4
+    apt-get -o 'Acquire::ForceIPv4=true' install -y zeek-lts
 
     # Add Zeek to the system path
     echo "export PATH=$PATH:/opt/zeek/bin" > /etc/profile.d/zeek.sh
     source /etc/profile.d/zeek.sh
 
     # 3. Install Suricata from Debian repository
-    apt-get install -y suricata
+    # ADDED: Force apt to use IPv4
+    apt-get -o 'Acquire::ForceIPv4=true' install -y suricata
 
     # 4. Basic Configuration
-    # Get the primary network interface name (usually ens4 on GCP)
     INTERFACE=$(ip -o -4 route show to default | awk '{print $5}')
-
-    # Configure Zeek to monitor the primary interface
     sed -i "s/^interface=.*$/interface=$INTERFACE/" /opt/zeek/etc/node.cfg
-
-    # Configure Suricata to monitor the primary interface
     sed -i "s/interface: eth0/interface: $INTERFACE/" /etc/suricata/suricata.yaml
-    # Also update the HOME_NET variable in Suricata's config
     SUBNET_CIDR=$(ip -o -4 addr show dev $INTERFACE | awk '{print $4}')
     sed -i "s|HOME_NET: \"\\[192.168.0.0/16,10.0.0.0/8,172.16.0.0/12\\]\"|HOME_NET: \"\"|" /etc/suricata/suricata.yaml
 
     # 5. Enable and Start Services
-    # Deploy Zeek using its control tool
     /opt/zeek/bin/zeekctl deploy
-
-    # Enable and start Suricata as a system service
     systemctl enable --now suricata
 
-    # 6. Enable IP forwarding at the kernel level (retained from previous step)
+    # 6. Enable IP forwarding at the kernel level
     echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-ip-forward.conf
     sysctl --system
   EOT
@@ -85,7 +77,7 @@ resource "google_compute_region_instance_group_manager" "nva" {
   }
 
   base_instance_name = "netprobe-nva"
-  target_size        = 2
+  target_size        = var.nva_instance_count
 
   auto_healing_policies {
     health_check      = google_compute_region_health_check.nva.id

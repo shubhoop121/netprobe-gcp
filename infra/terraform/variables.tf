@@ -9,3 +9,9 @@ variable "region" {
   type        = string
   default     = "asia-south1"
 }
+
+variable "nva_instance_count" {
+  description = "The number of NVA instances to run in the MIG."
+  type        = number
+  default     = 0
+}
