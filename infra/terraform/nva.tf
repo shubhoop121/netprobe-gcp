@@ -65,7 +65,7 @@ metadata_startup_script = <<-EOT
 Description=Zeek Network Security Monitor
 After=network.target
 
-
+[Service]
 Type=forking
 ExecStart=/opt/zeek/bin/zeekctl start
 ExecStop=/opt/zeek/bin/zeekctl stop
@@ -76,20 +76,15 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 
-  # 6. Professional Service Initialization and Startup
-  # Reload systemd to recognize the new zeek.service file
+  # 6. Reload systemd and perform first deploy
   sudo systemctl daemon-reload
 
-  # FIX #5: Run zeekctl deploy ONCE to generate initial configurations
+  # Generate configs without starting/stopping Zeek yet
   sudo /opt/zeek/bin/zeekctl deploy
-  # BEST PRACTICE: Immediately stop it so systemd can take over management
-  sudo /opt/zeek/bin/zeekctl stop
 
-  # FIX #6: Enable and start both services using the robust, canonical systemd sequence.
-  # This ensures services start on boot and can be managed consistently.
-  sudo systemctl enable zeek.service
-  sudo systemctl start zeek.service
-
+  # Enable + start via systemd (systemd owns the process now)
+  sudo systemctl enable --now zeek.service
+  
   sudo systemctl enable suricata.service
   sudo systemctl restart suricata.service # Use restart to ensure it picks up all config changes
 
