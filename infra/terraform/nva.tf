@@ -23,46 +23,44 @@ resource "google_compute_instance_template" "nva" {
 
   # This robust startup script incorporates all debugging findings and best practices
   # for service management.
-  metadata_startup_script = <<-EOT
-    #!/bin/bash
-    set -e
-    set -x # Print each command to the log for easier debugging
+metadata_startup_script = <<-EOT
+  #!/bin/bash
+  set -e
+  set -x # Print each command to the log for easier debugging
 
-    # 1. System Preparation
-    export DEBIAN_FRONTEND=noninteractive
-    sudo apt-get update
-    sudo apt-get install -y curl gnupg2
+  # 1. System Preparation
+  export DEBIAN_FRONTEND=noninteractive
+  sudo apt-get update
+  sudo apt-get install -y curl gnupg2
 
-    # 2. Install Zeek
-    echo 'deb http://download.opensuse.org/repositories/security:/zeek/Debian_11/ /' | sudo tee /etc/apt/sources.list.d/zeek.list
-    curl -fsSL https://download.opensuse.org/repositories/security:zeek/Debian_11/Release.key | sudo gpg --dearmor > /etc/apt/trusted.gpg.d/security_zeek.gpg
-    sudo apt-get update
-    sudo apt-get install -y zeek-lts
+  # 2. Install Zeek
+  echo 'deb http://download.opensuse.org/repositories/security:/zeek/Debian_11/ /' | sudo tee /etc/apt/sources.list.d/zeek.list
+  curl -fsSL https://download.opensuse.org/repositories/security:zeek/Debian_11/Release.key | sudo gpg --dearmor > /etc/apt/trusted.gpg.d/security_zeek.gpg
+  sudo apt-get update
+  sudo apt-get install -y zeek-lts
 
-    # 3. Install Suricata
-    sudo apt-get install -y suricata
+  # 3. Install Suricata
+  sudo apt-get install -y suricata
 
-    # 4. Robust Configuration
-    INTERFACE=$(ip -o -4 route show to default | awk '{print $5}')
-    SURICATA_CONF="/etc/suricata/suricata.yaml"
+  # 4. Robust Configuration (Based on your excellent debugging)
+  INTERFACE=$(ip -o -4 route show to default | awk '{print $5}')
+  SURICATA_CONF="/etc/suricata/suricata.yaml"
 
-    # Configure Zeek to monitor the primary interface
-    sudo sed -i "s/^interface=.*/interface=$INTERFACE/" /opt/zeek/etc/node.cfg
+  # FIX #2: Configure Zeek with a safer sed command
+  sudo sed -i "s/^interface=.*/interface=$INTERFACE/" /opt/zeek/etc/node.cfg
 
-    # Configure Suricata
-    # Replace only the first occurrence of the interface line
-    sudo sed -i "0,/interface:.*/s//interface: $INTERFACE/" $SURICATA_CONF
-    # Set a valid HOME_NET to prevent startup failure
-    sudo sed -i 's|HOME_NET: ""|HOME_NET: "\[10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16\]"|' $SURICATA_CONF
-    # Enable the command socket for `suricatasc`
-    sudo sed -i '/unix-command:/,/enabled: no/ s/enabled: no/enabled: yes/' $SURICATA_CONF
-    # Create the run directory for the socket
-    sudo mkdir -p /var/run/suricata
-    sudo chown suricata:suricata /var/run/suricata
+  # Configure Suricata with all discovered fixes
+  # FIX #3: Use a safer sed to replace only the first interface line
+  sudo sed -i "0,/interface:.*/s//interface: $INTERFACE/" $SURICATA_CONF
+  # FIX #1: Replace the correct default empty string for HOME_NET
+  sudo sed -i 's|HOME_NET: ""|HOME_NET: "\[10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16\]"|' $SURICATA_CONF
+  # FIX #4: Enable the command socket and create its run directory
+  sudo sed -i '/unix-command:/,/enabled: no/ s/enabled: no/enabled: yes/' $SURICATA_CONF
+  sudo mkdir -p /var/run/suricata
+  sudo chown suricata:suricata /var/run/suricata
 
-    # 5. Create a systemd service for Zeek (BETTER SOLUTION)
-    # This ensures Zeek is managed properly by the OS, just like Suricata.
-    sudo tee /etc/systemd/system/zeek.service > /dev/null <<'EOF'
+  # 5. Create a Professional systemd Service for Zeek
+  sudo tee /etc/systemd/system/zeek.service > /dev/null <<'EOF'
 [Unit]
 Description=Zeek Network Security Monitor
 After=network.target
@@ -78,18 +76,27 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 
-    # 6. Enable and Start Services
-    # Deploy Zeek once to generate initial configs, then manage with systemd
-    sudo /opt/zeek/bin/zeekctl deploy
+  # 6. Professional Service Initialization and Startup
+  # Reload systemd to recognize the new zeek.service file
+  sudo systemctl daemon-reload
 
-    # Enable and start both services using the OS service manager
-    sudo systemctl enable --now zeek.service
-    sudo systemctl enable --now suricata.service
+  # FIX #5: Run zeekctl deploy ONCE to generate initial configurations
+  sudo /opt/zeek/bin/zeekctl deploy
+  # BEST PRACTICE: Immediately stop it so systemd can take over management
+  sudo /opt/zeek/bin/zeekctl stop
 
-    # 7. Enable IP forwarding at the kernel level
-    echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-ip-forward.conf
-    sudo sysctl --system
-  EOT
+  # FIX #6: Enable and start both services using the robust, canonical systemd sequence.
+  # This ensures services start on boot and can be managed consistently.
+  sudo systemctl enable zeek.service
+  sudo systemctl start zeek.service
+
+  sudo systemctl enable suricata.service
+  sudo systemctl restart suricata.service # Use restart to ensure it picks up all config changes
+
+  # 7. Enable IP forwarding
+  echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-ip-forward.conf
+  sudo sysctl --system
+EOT
 
   lifecycle {
     create_before_destroy = true
