@@ -1,19 +1,61 @@
-# Note: For simplicity in this step, we are creating a rule that would apply to the NVA instances themselves. 
-# In a real-world scenario, you would create additional subnets for your actual workloads (e.g., web servers) 
-# and apply a route that targets traffic from those subnets.
+# infra/terraform/routing.tf
 
+# NEW: A high-priority "skip" route for the NVA instances themselves.
+# This rule ensures that traffic originating from the NVAs bypasses the
+# main inspection route and uses the default VPC routing table (via Cloud NAT).
+# -----------------------------------------
+# High-priority "skip" route for NVA traffic
+# Ensures NVAs use default routing (via Cloud NAT)
+# so their startup scripts don't get trapped in a loop.
+# -----------------------------------------
 
-resource "google_compute_route" "pbr_to_nva" {
-  name              = "netprobe-pbr-inspect-all"
-  network           = google_compute_network.main.name
-  dest_range        = "0.0.0.0/0"
-  priority          = 800 # Higher priority than default (1000)
+resource "google_network_connectivity_policy_based_route" "pbr_skip_nva" {
+  name    = "netprobe-pbr-skip-nva-traffic"
+  network = google_compute_network.main.id
 
-  # The IP address of the Internal Load Balancer's forwarding rule
-  next_hop_ilb = google_compute_forwarding_rule.nva.id
+  # Higher priority (lower number) than inspection route
+  priority = 700
 
-  # Apply this route only to traffic originating from instances with the 'nva' tag.
-  # In a real-world scenario, you would tag your workload VMs to be inspected.
-  # For now, this sets up the pattern.
-  tags = ["nva"]
+  # Tells GCP to ignore other PBRs and use the default VPC routing table
+  next_hop_other_routes = "DEFAULT_ROUTING"
+
+  filter {
+    protocol_version = "IPV4"
+    src_range        = "0.0.0.0/0"
+    dest_range       = "0.0.0.0/0"
+  }
+
+  # Applies ONLY to NVA VMs
+  virtual_machine {
+    tags = ["nva"]
+  }
+}
+
+# -----------------------------------------
+# Main inspection route (lower priority)
+# Sends traffic to Internal Load Balancer
+# -----------------------------------------
+resource "google_network_connectivity_policy_based_route" "pbr_to_nva" {
+  name    = "netprobe-pbr-inspect-all"
+  network = google_compute_network.main.id
+
+  # Lower priority (higher number) so it is evaluated after the skip route
+  priority = 800
+
+  next_hop_ilb_ip = google_compute_forwarding_rule.nva.ip_address
+
+  filter {
+    protocol_version = "IPV4"
+    src_range        = "0.0.0.0/0"
+    dest_range       = "0.0.0.0/0"
+  }
+
+  # Currently applies to NVAs; will update for workload VMs later
+  virtual_machine {
+    tags = ["nva"]
+  }
+
+  depends_on = [
+    google_network_connectivity_policy_based_route.pbr_skip_nva
+  ]
 }
