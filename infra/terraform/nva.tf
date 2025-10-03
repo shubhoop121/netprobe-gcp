@@ -3,7 +3,6 @@
 # Crucially, we enable can_ip_forward = true, which allows the VMs to act as routers—the key requirement 
 # for our inline inspection model.
 
-# infra/terraform/nva.tf
 
 resource "google_compute_instance_template" "nva" {
   name_prefix  = "netprobe-nva-template-"
@@ -23,11 +22,10 @@ resource "google_compute_instance_template" "nva" {
 
   can_ip_forward = true
 
-  # This robust startup script incorporates all debugging findings.
   metadata_startup_script = <<-EOT
     #!/bin/bash
     set -e
-    set -x # Print each command to the log for easier debugging
+    set -x  # Print each command to the log for easier debugging.
 
     # 1. System Preparation
     export DEBIAN_FRONTEND=noninteractive
@@ -49,25 +47,29 @@ resource "google_compute_instance_template" "nva" {
 
     # 4. Robust Configuration
     INTERFACE=$(ip -o -4 route show to default | awk '{print $5}')
-
-    # Configure Zeek to monitor the primary interface
-    sudo sed -i "s/^interface=.*$/interface=$INTERFACE/" /opt/zeek/etc/node.cfg
-
-    # Configure Suricata
     SURICATA_CONF="/etc/suricata/suricata.yaml"
-    # Set the primary network interface
-    sudo sed -i "s/interface: eth0/interface: $INTERFACE/" $SURICATA_CONF
-    # Set a valid HOME_NET variable to prevent startup failure.
-    # This defines HOME_NET as all standard private IP address spaces.
-    sudo sed -i 's|HOME_NET: "\[192.168.0.0/16,10.0.0.0/8,172.16.0.0/12\]"|HOME_NET: "\[10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16\]"|' $SURICATA_CONF
-    # Enable the command socket for tools like suricatasc
+
+    # Fix Zeek interface
+    sudo sed -i "s/^interface=.*/interface=$INTERFACE/" /opt/zeek/etc/node.cfg
+
+    # Fix Suricata interface (first match only)
+    sudo sed -i "0,/interface:.*/s//interface: $INTERFACE/" $SURICATA_CONF
+
+    # ✅ Option A: Explicitly override HOME_NET
+    sudo sed -i 's|HOME_NET: ""|HOME_NET: "[10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]"|' $SURICATA_CONF
+
+    # Enable the Unix command socket
     sudo sed -i '/unix-command:/,/enabled: no/ s/enabled: no/enabled: yes/' $SURICATA_CONF
+    sudo mkdir -p /var/run/suricata
+    sudo chown suricata:suricata /var/run/suricata
 
     # 5. Enable and Start Services
     sudo /opt/zeek/bin/zeekctl deploy
-    sudo systemctl enable --now suricata
+    sudo systemctl enable suricata
+    sudo systemctl daemon-reload
+    sudo systemctl restart suricata
 
-    # 6. Enable IP forwarding at the kernel level
+    # 6. Enable IP forwarding
     echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-ip-forward.conf
     sudo sysctl --system
   EOT
