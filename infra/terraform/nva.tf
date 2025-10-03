@@ -64,34 +64,34 @@ metadata_startup_script = <<-EOT
 [Unit]
 Description=Zeek Network Security Monitor
 After=network.target
+Wants=network-online.target
 
 [Service]
 Type=forking
+WorkingDirectory=/opt/zeek
 ExecStart=/opt/zeek/bin/zeekctl start
 ExecStop=/opt/zeek/bin/zeekctl stop
 ExecReload=/opt/zeek/bin/zeekctl restart
 RemainAfterExit=yes
+TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-  # 6. Reload systemd and perform first deploy
-  sudo systemctl daemon-reload
+    # 6. Initialize Zeek configs and enable services
+    sudo /opt/zeek/bin/zeekctl deploy
+    sudo chown -R $(whoami) /opt/zeek
 
-  # Generate configs without starting/stopping Zeek yet
-  sudo /opt/zeek/bin/zeekctl deploy
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now zeek.service
+    sudo systemctl enable --now suricata.service
+    sudo systemctl restart suricata.service
 
-  # Enable + start via systemd (systemd owns the process now)
-  sudo systemctl enable --now zeek.service
-  
-  sudo systemctl enable suricata.service
-  sudo systemctl restart suricata.service # Use restart to ensure it picks up all config changes
-
-  # 7. Enable IP forwarding
-  echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-ip-forward.conf
-  sudo sysctl --system
-EOT
+    # 7. Enable IP forwarding
+    echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-ip-forward.conf
+    sudo sysctl --system
+  EOT
 
   lifecycle {
     create_before_destroy = true
