@@ -7,7 +7,7 @@ resource "google_compute_firewall" "allow_iap_ssh" {
   }
   # This CIDR block is used by Google's Identity-Aware Proxy for secure SSH.
   source_ranges = ["35.235.240.0/20"]
-  target_tags   = ["nva"]
+  target_tags   = ["nva","workload"]
 }
 
 resource "google_compute_firewall" "allow_health_checks" {
@@ -19,4 +19,19 @@ resource "google_compute_firewall" "allow_health_checks" {
   # Specific IP ranges used by GCP health checkers.
   source_ranges = ["35.191.0.0/16", "130.211.0.0/22"]
   target_tags   = ["nva"]
+}
+
+# This rule allows traffic from our workload VMs to reach our NVA instances.
+# This is the missing link that allows the ILB to forward packets to the backends.
+resource "google_compute_firewall" "allow_workload_to_nva" {
+  name    = "netprobe-allow-workload-to-nva"
+  network = google_compute_network.main.name
+  
+  # We allow all protocols to ensure TCP, UDP, ICMP etc. can be inspected.
+  allow {
+    protocol = "all"
+  }
+
+  source_tags = ["workload"]
+  target_tags = ["nva"]
 }

@@ -1,14 +1,3 @@
-# infra/terraform/routing.tf
-
-# NEW: A high-priority "skip" route for the NVA instances themselves.
-# This rule ensures that traffic originating from the NVAs bypasses the
-# main inspection route and uses the default VPC routing table (via Cloud NAT).
-# -----------------------------------------
-# High-priority "skip" route for NVA traffic
-# Ensures NVAs use default routing (via Cloud NAT)
-# so their startup scripts don't get trapped in a loop.
-# -----------------------------------------
-
 resource "google_network_connectivity_policy_based_route" "pbr_skip_nva" {
   name    = "netprobe-pbr-skip-nva-traffic"
   network = google_compute_network.main.id
@@ -52,7 +41,7 @@ resource "google_network_connectivity_policy_based_route" "pbr_to_nva" {
 
   # Currently applies to NVAs; will update for workload VMs later
   virtual_machine {
-    tags = ["nva"]
+    tags = ["workload"]
   }
 
   depends_on = [
