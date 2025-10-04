@@ -10,3 +10,10 @@ resource "google_compute_subnetwork" "analysis" {
   network       = google_compute_network.main.id
   region        = var.region
 }
+
+resource "google_compute_subnetwork" "workload" {
+  name          = "netprobe-workload-subnet"
+  ip_cidr_range = "10.0.2.0/24"
+  network       = google_compute_network.main.id
+  region        = var.region
+}

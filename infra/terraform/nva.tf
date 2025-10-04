@@ -19,10 +19,13 @@ resource "google_compute_instance_template" "nva" {
 
   network_interface {
     subnetwork = google_compute_subnetwork.analysis.id
+      access_config {
+      // An empty block requests an ephemeral public IP address.
+    }
   }
 
-  can_ip_forward = true
-metadata_startup_script = <<-EOT
+  can_ip_forward          = true
+  metadata_startup_script = <<-EOT
 #!/bin/bash
 # Redirect all output to a dedicated log file for easy debugging
 exec > >(sudo tee /var/log/startup-script.log) 2>&1
