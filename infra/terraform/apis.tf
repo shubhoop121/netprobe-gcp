@@ -1,10 +1,28 @@
-# Ensures that the required Network Connectivity API is enabled for the project.
-# This makes our Terraform configuration self-contained and repeatable.
+# For Policy-Based Routing
 resource "google_project_service" "network_connectivity" {
-  project = var.project_id
-  service = "networkconnectivity.googleapis.com"
+  project            = var.project_id
+  service            = "networkconnectivity.googleapis.com"
+  disable_on_destroy = false
+}
 
-  # Do not disable the API when destroying the infrastructure,
-  # as other resources might depend on it.
+# For Secret Manager
+resource "google_project_service" "secretmanager" {
+  project            = var.project_id
+  service            = "secretmanager.googleapis.com"
+  disable_on_destroy = false
+}
+
+# --- MOVED FROM database.tf ---
+# For Cloud SQL private networking (VPC Peering)
+resource "google_project_service" "service_networking" {
+  project            = var.project_id
+  service            = "servicenetworking.googleapis.com"
+  disable_on_destroy = false
+}
+
+# For the Cloud SQL service itself
+resource "google_project_service" "sqladmin" {
+  project            = var.project_id
+  service            = "sqladmin.googleapis.com"
   disable_on_destroy = false
 }

@@ -1,0 +1,24 @@
+# apps/log-shipper/shipper.service
+
+[Unit]
+Description=NetProbe Log Shipper Service
+# This ensures it starts after the network is up and Zeek has created its log directory
+After=network.target zeek.service
+
+[Service]
+# These environment variables will be dynamically populated by the NVA's startup script
+Environment="DB_HOST="
+Environment="DB_PASSWORD="
+
+# The full path to the script after our git clone to /opt/netprobe
+ExecStart=/usr/bin/python3 /opt/netprobe/apps/log-shipper/shipper.py
+
+# Automatically restart the service if it fails
+Restart=on-failure
+RestartSec=5s
+
+# Run the service as the root user
+User=root
+
+[Install]
+WantedBy=multi-user.target

@@ -15,3 +15,15 @@ variable "nva_instance_count" {
   type        = number
   default     = 0
 }
+
+variable "db_password" {
+  description = "The password for the 'netprobe_user' PostgreSQL user."
+  type        = string
+  sensitive   = true
+}
+
+variable "branch_name" {
+  description = "The GitHub branch to clone on the NVA."
+  type        = string
+  default     = "main"
+}

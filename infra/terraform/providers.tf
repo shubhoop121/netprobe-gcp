@@ -7,7 +7,7 @@ terraform {
   }
 }
 
-provider "google" {
+provider "google"{
   project = "netprobe-473119"
   region  = "asia-south1"
 }
