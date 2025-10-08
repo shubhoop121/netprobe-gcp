@@ -25,101 +25,11 @@ resource "google_compute_instance_template" "nva" {
   }
 
   can_ip_forward          = true
-  metadata_startup_script = <<-EOT
-#!/bin/bash
-# Redirect all output to a dedicated log file for easy debugging
-exec > >(sudo tee /var/log/startup-script.log) 2>&1
-
-set -e
-set -x # Print each command to the log for debugging
-
-echo "--- STARTING NVA PROVISIONING SCRIPT ---"
-
-# 1. System Preparation
-echo "--- PHASE 1: System Preparation ---"
-export DEBIAN_FRONTEND=noninteractive
-sudo apt-get update
-sudo apt-get install -y curl gnupg2
-echo "--- COMPLETED: System Preparation ---"
-
-# 2. Install Zeek
-echo "--- PHASE 2: Zeek Installation ---"
-echo 'deb http://download.opensuse.org/repositories/security:/zeek/Debian_11/ /' | sudo tee /etc/apt/sources.list.d/zeek.list
-curl -fsSL https://download.opensuse.org/repositories/security:zeek/Debian_11/Release.key | sudo gpg --dearmor > /etc/apt/trusted.gpg.d/security_zeek.gpg
-sudo apt-get update
-sudo apt-get install -y zeek-lts
-echo "--- COMPLETED: Zeek Installation ---"
-
-# 3. Install Suricata
-echo "--- PHASE 3: Suricata Installation ---"
-sudo apt-get install -y suricata
-echo "--- COMPLETED: Suricata Installation ---"
-
-# 4. Robust Configuration
-echo "--- PHASE 4: Application Configuration ---"
-INTERFACE=$(ip -o -4 route show to default | awk '{print $5}')
-SURICATA_CONF="/etc/suricata/suricata.yaml"
-
-# Configure Zeek
-sudo sed -i "s/^interface=.*/interface=$INTERFACE/" /opt/zeek/etc/node.cfg
-
-# Configure Suricata
-sudo sed -i "0,/interface:.*/s//interface: $INTERFACE/" $SURICATA_CONF
-sudo sed -i 's|HOME_NET: ""|HOME_NET: "\[10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16\]"|' $SURICATA_CONF
-sudo sed -i '/unix-command:/,/enabled: no/ s/enabled: no/enabled: yes/' $SURICATA_CONF
-
-# Create the run directory only if Suricata user exists
-if id "suricata" &>/dev/null; then
-    sudo mkdir -p /var/run/suricata
-    sudo chown suricata:suricata /var/run/suricata
-fi
-echo "--- COMPLETED: Application Configuration ---"
-
-# 5. Create systemd Service for Zeek
-echo "--- PHASE 5: Creating Zeek systemd Service ---"
-sudo tee /etc/systemd/system/zeek.service > /dev/null <<'EOF'
-[Unit]
-Description=Zeek Network Security Monitor
-After=network.target
-
-[Service]
-Type=forking
-ExecStart=/opt/zeek/bin/zeekctl start
-ExecStop=/opt/zeek/bin/zeekctl stop
-ExecReload=/opt/zeek/bin/zeekctl restart
-Restart=on-failure
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-echo "--- COMPLETED: Creating Zeek systemd Service ---"
-
-# 6. Professional Service Initialization and Startup
-echo "--- PHASE 6: Service Initialization and Startup ---"
-sudo systemctl daemon-reload
-
-# Deploy Zeek once to generate initial configs, then stop so systemd can manage it
-sudo /opt/zeek/bin/zeekctl deploy
-sudo /opt/zeek/bin/zeekctl stop
-
-# Enable and start both services
-sudo systemctl enable zeek.service
-sudo systemctl start zeek.service
-
-sudo systemctl enable suricata.service
-sudo systemctl restart suricata.service
-echo "--- COMPLETED: Service Initialization and Startup ---"
-
-# 7. Enable IP forwarding
-echo "--- PHASE 7: Enabling IP Forwarding ---"
-echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-ip-forward.conf
-sudo sysctl --system
-echo "--- COMPLETED: IP Forwarding ---"
-
-echo "--- NVA PROVISIONING SCRIPT FINISHED SUCCESSFULLY ---"
-EOT
-
+  metadata_startup_script = templatefile("${path.module}/nva-startup.sh.tftpl", {
+    project_id    = var.project_id
+    branch_name   = var.branch_name
+    db_private_ip = google_sql_database_instance.netprobe_db.private_ip_address
+  })
 
   lifecycle {
     create_before_destroy = true
