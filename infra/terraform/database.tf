@@ -14,8 +14,6 @@ resource "google_service_networking_connection" "private_vpc_connection" {
   network                 = google_compute_network.main.id
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.private_service_access.name]
-
-  # This implicitly depends on the "servicenetworking" API being enabled in apis.tf
 }
 
 # --- Cloud SQL PostgreSQL Instance (Cost-Optimized) ---
