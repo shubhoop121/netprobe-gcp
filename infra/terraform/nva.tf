@@ -25,6 +25,15 @@ resource "google_compute_instance_template" "nva" {
   }
 
   can_ip_forward          = true
+
+  service_account {
+    # This is your project's Compute Engine default service account email
+    email  = "412150966753-compute@developer.gserviceaccount.com"
+    # This scope grants the VM full access to all cloud APIs.
+    # IAM roles will still be the final gatekeeper for what it can actually do.
+    scopes = ["cloud-platform"]
+  }
+
   metadata_startup_script = templatefile("${path.module}/nva-startup.sh.tftpl", {
     project_id    = var.project_id
     branch_name   = var.branch_name
