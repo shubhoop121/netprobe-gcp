@@ -12,7 +12,6 @@ resource "google_project_service" "secretmanager" {
   disable_on_destroy = false
 }
 
-# --- MOVED FROM database.tf ---
 # For Cloud SQL private networking (VPC Peering)
 resource "google_project_service" "service_networking" {
   project            = var.project_id
