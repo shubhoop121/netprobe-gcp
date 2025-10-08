@@ -15,3 +15,11 @@ variable "nva_instance_count" {
   type        = number
   default     = 0
 }
+
+# infra/terraform/variables.tf
+
+variable "db_password" {
+  description = "The password for the 'netprobe_user' PostgreSQL user."
+  type        = string
+  sensitive   = true
+}
