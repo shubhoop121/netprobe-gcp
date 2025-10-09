@@ -8,8 +8,6 @@ output "db_connection_name" {
   value       = google_sql_database_instance.netprobe_db.connection_name
 }
 
-# --- CORRECTED OUTPUTS BELOW ---
-
 output "test_workload_vm_name" {
   description = "The name of the test workload VM (only created when nva_instance_count > 0)."
   # This condition prevents the error when no VM is created.
