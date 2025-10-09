@@ -1,5 +1,3 @@
-# apps/log-shipper/shipper.service
-
 [Unit]
 Description=NetProbe Log Shipper Service
 # This ensures it starts after the network is up and Zeek has created its log directory

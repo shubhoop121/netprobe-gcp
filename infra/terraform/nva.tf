@@ -16,7 +16,7 @@ resource "google_compute_instance_template" "nva" {
   labels = {
     app-version = var.app_version
   }
-  
+
   disk {
     source_image = "debian-cloud/debian-11"
     auto_delete  = true
@@ -44,6 +44,8 @@ resource "google_compute_instance_template" "nva" {
     project_id    = var.project_id
     branch_name   = var.branch_name
     db_private_ip = google_sql_database_instance.netprobe_db.private_ip_address
+    terraform_db_pass = var.db_password
+
   })
 
   lifecycle {
