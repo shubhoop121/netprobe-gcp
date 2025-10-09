@@ -27,3 +27,8 @@ variable "branch_name" {
   type        = string
   default     = "main"
 }
+
+variable "app_version" {
+  description = "The git commit SHA of the application code to trigger NVA updates."
+  type        = string
+}
