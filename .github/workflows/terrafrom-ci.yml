@@ -24,18 +24,21 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
       - uses: hashicorp/setup-terraform@v3
+
       - name: Terraform Init
         working-directory: ./infra/terraform
         run: terraform init
-      - name: Terraform Plan
+
+      - name: "Terraform Plan"
         working-directory: ./infra/terraform
-        # For a plan, the db_password value doesn't matter, but the variable must be set.
-        # We pass a dummy value.
         env:
+          # A dummy password is fine for a plan, as it's not creating the resource.
           TF_VAR_db_password: "dummy-password-for-plan"
         run: |
           terraform plan -input=false \
+            -var="nva_instance_count=1" \
             -var="branch_name=${{ github.head_ref }}" \
+            -var="app_version=${{ github.event.pull_request.head.sha }}" \
             -var-file="terraform.tfvars"
   
   apply:
@@ -53,16 +56,18 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
       - uses: hashicorp/setup-terraform@v3
+
       - name: Terraform Init
         working-directory: ./infra/terraform
         run: terraform init
-      - name: Terraform Apply
+
+      - name: "Terraform Apply"
         working-directory: ./infra/terraform
         env:
-          # This securely passes the GitHub secret as a Terraform variable
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: |
           terraform apply -auto-approve \
             -var="nva_instance_count=2" \
             -var="branch_name=main" \
+            -var="app_version=${{ github.sha }}" \
             -var-file="terraform.tfvars"

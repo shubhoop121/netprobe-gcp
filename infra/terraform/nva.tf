@@ -11,6 +11,12 @@ resource "google_compute_instance_template" "nva" {
   region       = var.region
   tags         = ["nva"]
 
+  # This label acts as a trigger. When the app_version changes,
+  # a new instance template is created, forcing a rolling update.
+  labels = {
+    app-version = var.app_version
+  }
+  
   disk {
     source_image = "debian-cloud/debian-11"
     auto_delete  = true
