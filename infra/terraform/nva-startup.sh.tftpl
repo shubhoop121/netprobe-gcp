@@ -79,6 +79,7 @@ sudo git clone -b ${branch_name} https://oauth2:$${GITHUB_PAT}@github.com/shubho
 # Replace placeholder values in the template with our secrets and config
 sudo sed -e "s/Environment=\"DB_HOST=\"/Environment=\"DB_HOST=$${DB_PRIVATE_IP}\"/" \
     -e "s/Environment=\"DB_PASSWORD=\"/Environment=\"DB_PASSWORD=$${DB_PASS}\"/" \
+    -e "s/Environment=\"DB_USER=\"/Environment=\"DB_USER=netprobe_user\"/" \    
     /opt/netprobe/apps/log-shipper/shipper.service > /etc/systemd/system/shipper.service
 
 # Start and enable the service
