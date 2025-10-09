@@ -1,5 +1,3 @@
-# infra/terraform/outputs.tf (Corrected)
-
 output "netprobe_db_private_ip" {
   description = "The private IP address of the Cloud SQL instance (for the Log Shipper)."
   value       = google_sql_database_instance.netprobe_db.private_ip_address
