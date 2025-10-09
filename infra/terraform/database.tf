@@ -24,7 +24,6 @@ resource "google_sql_database_instance" "netprobe_db" {
   database_version = "POSTGRES_15"
 
   settings {
-    # This is the smallest shared-core tier for cost optimization.
     tier = "db-g1-small"
 
     # ZONAL means no high-availability, avoiding standby costs.
