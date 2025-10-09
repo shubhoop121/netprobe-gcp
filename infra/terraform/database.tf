@@ -48,7 +48,11 @@ resource "google_sql_database_instance" "netprobe_db" {
   }
 
   # Ensure the VPC peering is established before creating the SQL instance.
-  depends_on = [google_service_networking_connection.private_vpc_connection]
+  depends_on = [
+    google_service_networking_connection.private_vpc_connection,
+    google_project_service.sqladmin,
+    google_project_service.service_networking
+  ]
 }
 
 # Creates the specific database within the instance.
