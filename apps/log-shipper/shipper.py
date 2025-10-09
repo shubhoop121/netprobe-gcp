@@ -10,7 +10,7 @@ import argparse
 # Credentials and host are read from environment variables for security
 DB_HOST = os.environ.get('DB_HOST', 'db') # Defaults to 'db' for local Docker
 DB_NAME = os.environ.get('DB_NAME', 'netprobe_logs_local')
-DB_USER = os.environ.get('DB_USER', 'testuser')
+DB_USER = os.environ.get('DB_USER', 'netprobe_user')
 DB_PASSWORD = os.environ.get('DB_PASSWORD')
 
 # Constants
