@@ -1,5 +1,3 @@
-# infra/terraform/outputs.tf (Corrected)
-
 output "netprobe_db_private_ip" {
   description = "The private IP address of the Cloud SQL instance (for the Log Shipper)."
   value       = google_sql_database_instance.netprobe_db.private_ip_address
@@ -9,8 +7,6 @@ output "db_connection_name" {
   description = "The connection name of the Cloud SQL instance (for the CI/CD Proxy)."
   value       = google_sql_database_instance.netprobe_db.connection_name
 }
-
-# --- CORRECTED OUTPUTS BELOW ---
 
 output "test_workload_vm_name" {
   description = "The name of the test workload VM (only created when nva_instance_count > 0)."
