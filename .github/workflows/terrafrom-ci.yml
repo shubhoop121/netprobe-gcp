@@ -24,7 +24,7 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
       - uses: hashicorp/setup-terraform@v3
-      
+
       - name: Terraform Init
         working-directory: ./infra/terraform
         run: terraform init
@@ -38,7 +38,7 @@ jobs:
           terraform plan -input=false \
             -var="nva_instance_count=1" \
             -var="branch_name=${{ github.head_ref }}" \
-            -var="app_version=${{ github.event.pull_request.head.sha }}" \ # <-- THE CORRECTION
+            -var="app_version=${{ github.event.pull_request.head.sha }}" \
             -var-file="terraform.tfvars"
   
   apply:
@@ -69,5 +69,5 @@ jobs:
           terraform apply -auto-approve \
             -var="nva_instance_count=2" \
             -var="branch_name=main" \
-            -var="app_version=${{ github.sha }}" \ # <-- THE NEW TRIGGER
+            -var="app_version=${{ github.sha }}" \
             -var-file="terraform.tfvars"
