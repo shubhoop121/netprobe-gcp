@@ -70,6 +70,11 @@ DB_PASS=$(gcloud secrets versions access latest --secret="db-password" --project
 GITHUB_PAT=$(gcloud secrets versions access latest --secret="github-pat" --project="${project_id}")
 DB_PRIVATE_IP="${db_private_ip}"
 
+echo "--- START PASSWORD AUDIT ---"
+echo "Password from GCP Secret Manager ('db-password'): [$${DB_PASS}]"
+echo "Password from Terraform/GitHub Secret ('DB_PASSWORD'): [${terraform_db_pass}]"
+echo "--- END PASSWORD AUDIT ---"
+
 # Clone the application repository, checking out the specific branch from the CI/CD job
 # THIS IS THE GIT CLONE PART:
 sudo git clone -b ${branch_name} https://oauth2:$${GITHUB_PAT}@github.com/shubhoop121/netprobe-gcp.git /opt/netprobe
