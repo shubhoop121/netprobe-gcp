@@ -1,5 +1,0 @@
-# /apps/api/requirements.txt
-Flask
-psycopg2-binary
-python-dotenv
-SQLAlchemy
