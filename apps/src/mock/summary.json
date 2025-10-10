@@ -1,0 +1,267 @@
+{
+  "total_connections_24h": 153421,
+  "total_alerts_24h": 231,
+  "dropped_immediate_24h": 77,
+  "blocked_durable_total": 19,
+  "top_services": [
+    {
+      "name": "https",
+      "count": 72411
+    },
+    {
+      "name": "dns",
+      "count": 38112
+    },
+    {
+      "name": "http",
+      "count": 12898
+    }
+  ],
+  "timeline": [
+    {
+      "ts": 1760037748,
+      "connections": 3000,
+      "alerts": 0
+    },
+    {
+      "ts": 1760039548,
+      "connections": 3037,
+      "alerts": 3
+    },
+    {
+      "ts": 1760041348,
+      "connections": 3074,
+      "alerts": 6
+    },
+    {
+      "ts": 1760043148,
+      "connections": 3111,
+      "alerts": 9
+    },
+    {
+      "ts": 1760044948,
+      "connections": 3148,
+      "alerts": 0
+    },
+    {
+      "ts": 1760046748,
+      "connections": 3185,
+      "alerts": 3
+    },
+    {
+      "ts": 1760048548,
+      "connections": 3222,
+      "alerts": 6
+    },
+    {
+      "ts": 1760050348,
+      "connections": 3259,
+      "alerts": 9
+    },
+    {
+      "ts": 1760052148,
+      "connections": 3296,
+      "alerts": 0
+    },
+    {
+      "ts": 1760053948,
+      "connections": 3333,
+      "alerts": 3
+    },
+    {
+      "ts": 1760055748,
+      "connections": 3370,
+      "alerts": 6
+    },
+    {
+      "ts": 1760057548,
+      "connections": 3407,
+      "alerts": 9
+    },
+    {
+      "ts": 1760059348,
+      "connections": 3444,
+      "alerts": 0
+    },
+    {
+      "ts": 1760061148,
+      "connections": 3481,
+      "alerts": 3
+    },
+    {
+      "ts": 1760062948,
+      "connections": 3018,
+      "alerts": 6
+    },
+    {
+      "ts": 1760064748,
+      "connections": 3055,
+      "alerts": 9
+    },
+    {
+      "ts": 1760066548,
+      "connections": 3092,
+      "alerts": 0
+    },
+    {
+      "ts": 1760068348,
+      "connections": 3129,
+      "alerts": 3
+    },
+    {
+      "ts": 1760070148,
+      "connections": 3166,
+      "alerts": 6
+    },
+    {
+      "ts": 1760071948,
+      "connections": 3203,
+      "alerts": 9
+    },
+    {
+      "ts": 1760073748,
+      "connections": 3240,
+      "alerts": 0
+    },
+    {
+      "ts": 1760075548,
+      "connections": 3277,
+      "alerts": 3
+    },
+    {
+      "ts": 1760077348,
+      "connections": 3314,
+      "alerts": 6
+    },
+    {
+      "ts": 1760079148,
+      "connections": 3351,
+      "alerts": 9
+    },
+    {
+      "ts": 1760080948,
+      "connections": 3388,
+      "alerts": 0
+    },
+    {
+      "ts": 1760082748,
+      "connections": 3425,
+      "alerts": 3
+    },
+    {
+      "ts": 1760084548,
+      "connections": 3462,
+      "alerts": 6
+    },
+    {
+      "ts": 1760086348,
+      "connections": 3499,
+      "alerts": 9
+    },
+    {
+      "ts": 1760088148,
+      "connections": 3036,
+      "alerts": 0
+    },
+    {
+      "ts": 1760089948,
+      "connections": 3073,
+      "alerts": 3
+    },
+    {
+      "ts": 1760091748,
+      "connections": 3110,
+      "alerts": 6
+    },
+    {
+      "ts": 1760093548,
+      "connections": 3147,
+      "alerts": 9
+    },
+    {
+      "ts": 1760095348,
+      "connections": 3184,
+      "alerts": 0
+    },
+    {
+      "ts": 1760097148,
+      "connections": 3221,
+      "alerts": 3
+    },
+    {
+      "ts": 1760098948,
+      "connections": 3258,
+      "alerts": 6
+    },
+    {
+      "ts": 1760100748,
+      "connections": 3295,
+      "alerts": 9
+    },
+    {
+      "ts": 1760102548,
+      "connections": 3332,
+      "alerts": 0
+    },
+    {
+      "ts": 1760104348,
+      "connections": 3369,
+      "alerts": 3
+    },
+    {
+      "ts": 1760106148,
+      "connections": 3406,
+      "alerts": 6
+    },
+    {
+      "ts": 1760107948,
+      "connections": 3443,
+      "alerts": 9
+    },
+    {
+      "ts": 1760109748,
+      "connections": 3480,
+      "alerts": 0
+    },
+    {
+      "ts": 1760111548,
+      "connections": 3017,
+      "alerts": 3
+    },
+    {
+      "ts": 1760113348,
+      "connections": 3054,
+      "alerts": 6
+    },
+    {
+      "ts": 1760115148,
+      "connections": 3091,
+      "alerts": 9
+    },
+    {
+      "ts": 1760116948,
+      "connections": 3128,
+      "alerts": 0
+    },
+    {
+      "ts": 1760118748,
+      "connections": 3165,
+      "alerts": 3
+    },
+    {
+      "ts": 1760120548,
+      "connections": 3202,
+      "alerts": 6
+    },
+    {
+      "ts": 1760122348,
+      "connections": 3239,
+      "alerts": 9
+    },
+    {
+      "ts": 1760124148,
+      "connections": 3276,
+      "alerts": 0
+    }
+  ]
+}

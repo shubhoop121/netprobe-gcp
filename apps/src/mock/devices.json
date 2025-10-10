@@ -1,0 +1,31 @@
+{
+  "items": [
+    {
+      "ip": "10.0.2.10",
+      "hostname": "app-01",
+      "mac": "00:11:22:33:44:55",
+      "last_seen": 1760124088,
+      "alerts_24h": 2,
+      "bytes_tx": 8342342,
+      "bytes_rx": 14234322
+    },
+    {
+      "ip": "10.0.2.22",
+      "hostname": "db-01",
+      "mac": "00:16:22:73:44:55",
+      "last_seen": 1760124028,
+      "alerts_24h": 0,
+      "bytes_tx": 934222,
+      "bytes_rx": 4234322
+    },
+    {
+      "ip": "10.0.2.35",
+      "hostname": "iot-cam",
+      "mac": "a0:b1:c2:d3:e4:f5",
+      "last_seen": 1760124136,
+      "alerts_24h": 4,
+      "bytes_tx": 18342342,
+      "bytes_rx": 4234322
+    }
+  ]
+}
