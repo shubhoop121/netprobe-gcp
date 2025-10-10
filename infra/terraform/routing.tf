@@ -1,3 +1,28 @@
+resource "google_network_connectivity_policy_based_route" "pbr_allow_nva_to_internal" {
+
+  name    = "netprobe-pbr-allow-nva-to-internal"
+  network = google_compute_network.main.id
+
+  # Highest priority (lowest number) to be evaluated first.
+  priority = 650
+
+  # This tells GCP to use the VPC's main route table, which knows how to
+  # reach other subnets and the peered Cloud SQL network.
+  next_hop_other_routes = "DEFAULT_ROUTING"
+
+  filter {
+    protocol_version = "IPV4"
+    # The destination is any private IP address in your VPC's range.
+    dest_range       = "10.0.0.0/8"
+  }
+
+  # This rule applies ONLY to traffic originating from the NVA instances.
+  virtual_machine {
+    tags = ["nva"]
+  }
+}
+
+
 resource "google_network_connectivity_policy_based_route" "pbr_skip_nva" {
   name    = "netprobe-pbr-skip-nva-traffic"
   network = google_compute_network.main.id
@@ -19,7 +44,6 @@ resource "google_network_connectivity_policy_based_route" "pbr_skip_nva" {
     tags = ["nva"]
   }
 }
-
 # -----------------------------------------
 # Main inspection route (lower priority)
 # Sends traffic to Internal Load Balancer
