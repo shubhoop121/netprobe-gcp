@@ -77,7 +77,7 @@ echo -n 'ghp_xxx' | gcloud secrets create github-pat --data-file=-
 
 ```hcl
 project_id  = "your-gcp-project"
-region      = "asia-south1"
+region      = "your-region"
 db_password = "STRONG_DB_PASSWORD"  # used for initial SQL user creation
 nva_instance_count = 0              # start with 0 (no MIG yet)
 branch_name = "main"
@@ -274,3 +274,4 @@ Open-source communities behind **Zeek** and **Suricata**. Google Cloud docs for 
 6. Registers **Zeek** & **Suricata** with `systemd`, enables & starts services
 
 ---
+
