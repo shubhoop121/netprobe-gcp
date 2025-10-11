@@ -1,5 +1,4 @@
 name: "Terraform CI/CD"
-
 on:
   push:
     branches:
@@ -7,7 +6,6 @@ on:
   pull_request:
     branches:
       - main
-
 jobs:
   plan:
     name: "Terraform Plan on PR"
@@ -42,7 +40,7 @@ jobs:
             -var-file="terraform.tfvars"
   
   apply:
-    name: "Terraform Apply to Main"
+    name: "Terraform Apply & Validate"
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -71,3 +69,48 @@ jobs:
             -var="branch_name=main" \
             -var="app_version=${{ github.sha }}" \
             -var-file="terraform.tfvars"
+
+      - name: Create Database Schema # This is a deployment task
+        run: |
+          # ... (The full schema creation script from our previous discussion goes here) ...
+      - name: Get Terraform Outputs
+        id: tf-outputs
+        working-directory: ./infra/terraform
+        run: |
+          echo "workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_OUTPUT
+          echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
+          echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
+
+  # JOB 3: VALIDATE
+  # This job's ONLY responsibility is to run the E2E test against the deployed infra.
+  validate:
+    name: "Validate Deployment"
+    needs: apply # This job only starts after 'apply' succeeds
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: "write"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: Wait for NVA startup scripts
+        run: sleep 300
+      - name: Run Live Traffic Test
+        run: |
+          gcloud compute ssh ${{ needs.apply.outputs.workload_vm_name }} \
+            --zone=${{ needs.apply.outputs.workload_vm_zone }} \
+            --tunnel-through-iap \
+            --command="curl -v https://google.com"
+      - name: Validate Database Records
+        run: |
+          chmod +x ./scripts/validate-db.sh
+          ./scripts/validate-db.sh
+        env:
+          DB_CONNECTION_NAME: ${{ needs.apply.outputs.db_connection_name }}
+      - name: Cleanup Test VM
+        if: always()
+        working-directory: ./infra/terraform
+        run: terraform destroy -auto-approve -target=google_compute_instance.test_workload[0]
