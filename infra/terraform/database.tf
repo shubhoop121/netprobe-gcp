@@ -25,8 +25,6 @@ resource "google_sql_database_instance" "netprobe_db" {
 
   settings {
     tier = "db-g1-small"
-
-    # ZONAL means no high-availability, avoiding standby costs.
     availability_type = "ZONAL"
 
     # Start the instance immediately upon creation.
