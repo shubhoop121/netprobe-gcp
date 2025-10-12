@@ -11,7 +11,7 @@ on:
 jobs:
   # ======================================================================================
   # JOB 1: TERRAFORM PLAN (Runs on Pull Request)
-  # Now runs securely inside the Cloud SDK container.
+  # Now installs Terraform before running commands.
   # ======================================================================================
   plan:
     name: "Terraform Plan on PR"
@@ -37,6 +37,13 @@ jobs:
           entrypoint: /bin/bash
           args: -c "
             set -e
+            echo '--- [PLAN] Installing Dependencies ---'
+            apt-get update && apt-get install -y gnupg software-properties-common curl
+            curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add -
+            apt-add-repository 'deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main'
+            apt-get update && apt-get install -y terraform
+
+            echo '--- [PLAN] Running Terraform ---'
             cd ./infra/terraform
             terraform init
             terraform plan -input=false -var='nva_instance_count=1' -var='branch_name=${{ github.head_ref }}' -var='app_version=${{ github.event.pull_request.head.sha }}' -var-file='terraform.tfvars'
@@ -46,7 +53,7 @@ jobs:
 
   # ======================================================================================
   # JOB 2: TERRAFORM APPLY & SCHEMA (Runs on Merge to Main)
-  # All operations now run inside the same trusted container.
+  # Now installs Terraform before running commands.
   # ======================================================================================
   apply:
     name: "Terraform Apply & Create Schema"
@@ -71,17 +78,21 @@ jobs:
         with:
           entrypoint: /bin/bash
           args: |
-           -c "
+            -c "
             set -e
-            cd ./infra/terraform
+            echo '--- [APPLY] Installing Dependencies ---'
+            apt-get update && apt-get install -y gnupg software-properties-common curl
+            curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add -
+            apt-add-repository 'deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main'
+            apt-get update && apt-get install -y terraform
             
-            echo '--- [Terraform Init & Apply] ---'
+            echo '--- [APPLY] Running Terraform Apply ---'
+            cd ./infra/terraform
             terraform init
             terraform apply -auto-approve -var='nva_instance_count=2' -var='branch_name=main' -var='app_version=${{ github.sha }}' -var-file='terraform.tfvars'
             
-            echo '--- [Create Schema] ---'
+            echo '--- [APPLY] Creating Database Schema ---'
             DB_IP=\$(terraform output -raw netprobe_db_private_ip)
-            echo '--- Found Database IP- \$DB_IP ---'
             chmod +x ../../scripts/create-schema.sh
             ../../scripts/create-schema.sh \$DB_IP
             "
@@ -91,7 +102,6 @@ jobs:
   
   # ======================================================================================
   # JOB 3: VALIDATE DEPLOYMENT (Runs after Apply)
-  # Also fully containerized for consistency.
   # ======================================================================================
   validate:
     name: "Validate Deployment"
@@ -115,22 +125,29 @@ jobs:
         uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: -c "
+          args: |
+            -c "
             set -e
             cd ./infra/terraform
 
-            echo '--- Waiting for NVA startup... ---'
+            echo '--- [VALIDATE] Waiting for NVA startup... ---'
             sleep 300
 
-            echo '--- Getting Terraform Outputs... ---'
+            echo '--- [VALIDATE] Installing Terraform to get outputs... ---'
+            apt-get update && apt-get install -y gnupg software-properties-common curl
+            curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add -
+            apt-add-repository 'deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main'
+            apt-get update && apt-get install -y terraform
+            terraform init
+
             WORKLOAD_VM_NAME=\$(terraform output -raw test_workload_vm_name)
             WORKLOAD_VM_ZONE=\$(terraform output -raw test_workload_vm_zone)
             DB_CONNECTION_NAME=\$(terraform output -raw db_connection_name)
 
-            echo \"--- Triggering traffic from workload VM- \$WORKLOAD_VM_NAME ---\"
+            echo \"--- [VALIDATE] Triggering traffic from workload VM: \$WORKLOAD_VM_NAME ---\"
             gcloud compute ssh \$WORKLOAD_VM_NAME --zone=\$WORKLOAD_VM_ZONE --tunnel-through-iap --command='curl -v https://google.com'
 
-            echo '--- Validating database records... ---'
+            echo '--- [VALIDATE] Validating database records... ---'
             chmod +x ../../scripts/validate-db.sh
             ../../scripts/validate-db.sh \$DB_CONNECTION_NAME
             "
@@ -142,6 +159,13 @@ jobs:
           entrypoint: /bin/bash
           args: -c "
             set -e
+            echo '--- [CLEANUP] Installing Terraform ---'
+            apt-get update && apt-get install -y gnupg software-properties-common curl
+            curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add -
+            apt-add-repository 'deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main'
+            apt-get update && apt-get install -y terraform
+
+            echo '--- [CLEANUP] Destroying Test VM ---'
             cd ./infra/terraform
             terraform init
             terraform destroy -auto-approve -target=google_compute_instance.test_workload[0]
