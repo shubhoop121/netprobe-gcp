@@ -89,7 +89,7 @@ jobs:
             
             # 1. Get the Database IP directly inside this step
             DB_IP=\$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip)
-            echo \"--- Found Database IP: \$DB_IP --- \"
+            echo "--- Found Database IP: \$DB_IP --- "
 
             # 2. Make the script executable
             chmod +x ./scripts/create-schema.sh
