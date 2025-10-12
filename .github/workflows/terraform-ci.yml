@@ -81,7 +81,8 @@ jobs:
         uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: -c "
+          args: |
+            -c "
             set -e
             echo '--- Getting DB IP and applying schema... ---'
             cd ./infra/terraform
