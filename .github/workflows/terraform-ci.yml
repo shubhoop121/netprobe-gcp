@@ -45,6 +45,7 @@ jobs:
   
   # ======================================================================================
   # JOB 2: TERRAFORM APPLY (Runs on Merge to Main)
+  # This job's ONLY responsibility is to deploy the infrastructure and create the schema.
   # ======================================================================================
   apply:
     name: "Terraform Apply to Main"
@@ -59,38 +60,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: "Authenticate to Google Cloud"
-        uses: "google-github-actions/auth@v2"
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-      - name: "Set up Terraform"
-        uses: hashicorp/setup-terraform@v3
-
-      - name: "Terraform Init"
-        working-directory: ./infra/terraform
-        run: terraform init
-
-      - name: "Terraform Apply"
-        working-directory: ./infra/terraform
-        env:
-          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-        run: terraform apply -auto-approve -var="nva_instance_count=2" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
-
-apply:
-    name: "Terraform Apply to Main"
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: "read"
-      id-token: "write"
-
-    steps:
-      - name: "Checkout code"
-        uses: actions/checkout@v4
-
-      - name: "Authenticate to Google Cloud"
-        id: auth # Give this step an ID
+        id: auth
         uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -110,10 +80,8 @@ apply:
         run: terraform apply -auto-approve -var="nva_instance_count=2" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
       
       - name: "Create Database Schema"
-        # We use the container for a reliable environment...
         uses: docker://google/cloud-sdk:latest
         with:
-          # ...and tell it to run our clean, separate script.
           entrypoint: /bin/bash
           args: -c "
             chmod +x ./scripts/create-schema.sh && \
@@ -121,12 +89,12 @@ apply:
             ./scripts/create-schema.sh
             "
         env:
-          PGPASSWORD: ${{ secrets.DB_DB_PASSWORD }}
+          PGPASSWORD: ${{ secrets.DB_PASSWORD }}
 
   # ======================================================================================
   # JOB 3: VALIDATE DEPLOYMENT (Runs after Apply on Merge to Main)
   # ======================================================================================
-validate:
+  validate:
     name: "Validate Deployment"
     needs: apply 
     runs-on: ubuntu-latest
@@ -139,7 +107,6 @@ validate:
         uses: actions/checkout@v4
 
       - name: "Authenticate to Google Cloud"
-        id: auth
         uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -171,16 +138,12 @@ validate:
             --tunnel-through-iap \
             --command="curl -v https://google.com"
 
-      # --- THIS IS THE FINAL, CLEAN VALIDATION STEP ---
       - name: "Validate Database Records"
-        # We use the container for a reliable environment...
         uses: docker://google/cloud-sdk:latest
         with:
-          # ...and tell it to run our clean, separate script.
           entrypoint: /bin/bash
           args: -c "chmod +x ./scripts/validate-db.sh && ./scripts/validate-db.sh"
         env:
-          # Pass the connection name from the previous step into the container.
           DB_CONNECTION_NAME: ${{ env.db_connection_name }}
 
       - name: "Cleanup Test VM"
