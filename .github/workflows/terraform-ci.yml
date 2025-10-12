@@ -119,75 +119,75 @@ apply:
             chmod +x ./scripts/create-schema.sh && \
             export DB_IP=\$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip) && \
             ./scripts/create-schema.sh
-            "
+          "
         env:
           PGPASSWORD: ${{ secrets.DB_DB_PASSWORD }}
 
   # ======================================================================================
   # JOB 3: VALIDATE DEPLOYMENT (Runs after Apply on Merge to Main)
   # ======================================================================================
-    validate:
-      name: "Validate Deployment"
-      needs: apply 
-      runs-on: ubuntu-latest
-      permissions:
-        contents: "read" 
-        id-token: "write"
+validate:
+    name: "Validate Deployment"
+    needs: apply 
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read" 
+      id-token: "write"
 
-      steps:
-        - name: "Checkout code"
-          uses: actions/checkout@v4
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v4
 
-        - name: "Authenticate to Google Cloud"
-          id: auth
-          uses: "google-github-actions/auth@v2"
-          with:
-            workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-            service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - name: "Authenticate to Google Cloud"
+        id: auth
+        uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-        - name: "Set up Terraform"
-          uses: hashicorp/setup-terraform@v3
+      - name: "Set up Terraform"
+        uses: hashicorp/setup-terraform@v3
 
-        - name: "Terraform Init" 
-          working-directory: ./infra/terraform
-          run: terraform init
+      - name: "Terraform Init" 
+        working-directory: ./infra/terraform
+        run: terraform init
 
-        - name: "Wait for NVA startup scripts"
-          run: sleep 300
+      - name: "Wait for NVA startup scripts"
+        run: sleep 300
 
-        - name: "Get Terraform Outputs"
-          id: tf-outputs
-          working-directory: ./infra/terraform
-          run: |
-            echo "workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_ENV
-            echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_ENV
-            echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_ENV
+      - name: "Get Terraform Outputs"
+        id: tf-outputs
+        working-directory: ./infra/terraform
+        run: |
+          echo "workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_ENV
+          echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_ENV
+          echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_ENV
       
-        - name: "Run Live Traffic Test"
-          run: |
-            echo "--- Triggering traffic from workload VM: ${{ env.workload_vm_name }} ---"
-            gcloud compute ssh ${{ env.workload_vm_name }} \
+      - name: "Run Live Traffic Test"
+        run: |
+          echo "--- Triggering traffic from workload VM: ${{ env.workload_vm_name }} ---"
+          gcloud compute ssh ${{ env.workload_vm_name }} \
             --zone=${{ env.workload_vm_zone }} \
             --tunnel-through-iap \
             --command="curl -v https://google.com"
 
       # --- THIS IS THE FINAL, CLEAN VALIDATION STEP ---
-        - name: "Validate Database Records"
+      - name: "Validate Database Records"
         # We use the container for a reliable environment...
-          uses: docker://google/cloud-sdk:latest
-          with:
+        uses: docker://google/cloud-sdk:latest
+        with:
           # ...and tell it to run our clean, separate script.
-            entrypoint: /bin/bash
-            args: -c "chmod +x ./scripts/validate-db.sh && ./scripts/validate-db.sh"
-          env:
+          entrypoint: /bin/bash
+          args: -c "chmod +x ./scripts/validate-db.sh && ./scripts/validate-db.sh"
+        env:
           # Pass the connection name from the previous step into the container.
-            DB_CONNECTION_NAME: ${{ env.db_connection_name }}
+          DB_CONNECTION_NAME: ${{ env.db_connection_name }}
 
-        - name: "Cleanup Test VM"
-          if: always()
-          working-directory: ./infra/terraform
-          env:
-            TF_VAR_db_password: "dummy-password-for-cleanup"
-          run: |
-            terraform init 
-            terraform destroy -auto-approve -target=google_compute_instance.test_workload[0]
+      - name: "Cleanup Test VM"
+        if: always()
+        working-directory: ./infra/terraform
+        env:
+          TF_VAR_db_password: "dummy-password-for-cleanup"
+        run: |
+          terraform init 
+          terraform destroy -auto-approve -target=google_compute_instance.test_workload[0]
