@@ -86,7 +86,7 @@ jobs:
             echo '--- Getting DB IP and applying schema... ---'
             cd ./infra/terraform
             DB_IP=\$(terraform output -raw netprobe_db_private_ip)
-            echo \"--- Found Database IP: \$DB_IP ---\"
+            echo \"--- Found Database IP- \$DB_IP ---\"
             chmod +x ../../scripts/create-schema.sh
             ../../scripts/create-schema.sh \$DB_IP
           "
