@@ -47,7 +47,7 @@ jobs:
   # JOB 2: TERRAFORM APPLY (Runs on Merge to Main)
   # This job's ONLY responsibility is to deploy the infrastructure and create the schema.
   # ======================================================================================
-  apply:
+apply:
     name: "Terraform Apply to Main"
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -79,22 +79,30 @@ jobs:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: terraform apply -auto-approve -var="nva_instance_count=2" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
       
+      # --- NEW STEP TO GET THE DATABASE IP ---
+      - name: "Get Database IP"
+        id: get_db_ip
+        working-directory: ./infra/terraform
+        run: echo "DB_IP=$(terraform output -raw netprobe_db_private_ip)" >> $GITHUB_ENV
+
+      # --- THIS IS THE FINAL, CORRECTED SCHEMA STEP ---
       - name: "Create Database Schema"
+        # We use the container for a reliable environment...
         uses: docker://google/cloud-sdk:latest
         with:
+          # ...and tell it to run our existing, clean script.
           entrypoint: /bin/bash
-          args: -c "
-            chmod +x ./scripts/create-schema.sh && \
-            export DB_IP=\$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip) && \
-            ./scripts/create-schema.sh
-            "
+          args: -c "chmod +x ./scripts/create-schema.sh && ./scripts/create-schema.sh"
         env:
+          # Pass both the password and the IP address into the container.
+          # The script will inherit these environment variables.
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_IP: ${{ env.DB_IP }}
 
   # ======================================================================================
   # JOB 3: VALIDATE DEPLOYMENT (Runs after Apply on Merge to Main)
   # ======================================================================================
-  validate:
+validate:
     name: "Validate Deployment"
     needs: apply 
     runs-on: ubuntu-latest
