@@ -87,7 +87,7 @@ jobs:
         uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: -c "chmod +x ./scripts/create-schema.sh && ./scripts/create-schema.sh"
+          args: -c "chmod +x ./scripts/create-schema.sh && ./scripts/create-schema.sh ${{ env.DB_IP }}"
         env:
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_IP: ${{ env.DB_IP }}
@@ -143,9 +143,7 @@ jobs:
         uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: -c "chmod +x ./scripts/validate-db.sh && ./scripts/validate-db.sh"
-        env:
-          DB_CONNECTION_NAME: ${{ env.db_connection_name }}
+          args: -c "chmod +x ./scripts/validate-db.sh && ./scripts/validate-db.sh ${{ env.db_connection_name }}"
 
       - name: "Cleanup Test VM"
         if: always()

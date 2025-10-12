@@ -1,15 +1,17 @@
 #!/bin/bash
 set -e
 
-echo "--- [validate-db.sh] Starting validation from within the Cloud SDK container ---"
-sleep 60 # Wait for the log shipper to process the traffic
+# Read the connection name from the first command-line argument
+DB_CONNECTION_NAME=$1
 
-# The proxy is already in the container's PATH.
+echo "--- [validate-db.sh] Starting validation for instance: $DB_CONNECTION_NAME ---"
+sleep 60
+
+# Start the proxy
 echo "--- [validate-db.sh] Starting Cloud SQL Proxy ---"
 cloud-sql-proxy --ip-address-types=PRIVATE $DB_CONNECTION_NAME &
-sleep 5 # Wait for proxy to initialize
+sleep 5
 
-# --- THIS IS THE FIX ---
 # Install the PostgreSQL client before trying to use it.
 echo "--- [validate-db.sh] Installing PostgreSQL client ---"
 apt-get update && apt-get install -y postgresql-client
