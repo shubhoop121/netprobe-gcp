@@ -81,13 +81,13 @@ jobs:
       - name: "Get Database IP"
         id: get_db_ip
         working-directory: ./infra/terraform
-        run: echo "DB_IP=$(terraform output -raw netprobe_db_private_ip)" >> $GITHUB_ENV
+        run: echo "db_ip=$(terraform output -raw netprobe_db_private_ip)" >> $GITHUB_OUTPUT
 
       - name: "Create Database Schema"
         uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: -c "chmod +x ./scripts/create-schema.sh && ./scripts/create-schema.sh ${{ env.DB_IP }}"
+          args: -c "chmod +x ./scripts/create-schema.sh && ./scripts/create-schema.sh ${{ steps.get_db_ip.outputs.db_ip }}"
         env:
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_IP: ${{ env.DB_IP }}
@@ -127,9 +127,9 @@ jobs:
         id: tf-outputs
         working-directory: ./infra/terraform
         run: |
-          echo "workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_ENV
-          echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_ENV
-          echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_ENV
+          echo "workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_OUTPUT
+          echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
+          echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
       
       - name: "Run Live Traffic Test"
         run: |
@@ -143,7 +143,7 @@ jobs:
         uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: -c "chmod +x ./scripts/validate-db.sh && ./scripts/validate-db.sh ${{ env.db_connection_name }}"
+          args: -c "chmod +x ./scripts/validate-db.sh && ./scripts/validate-db.sh ${{ steps.tf-outputs.outputs.db_connection_name }}"
 
       - name: "Cleanup Test VM"
         if: always()
