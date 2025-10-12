@@ -1,11 +1,12 @@
 #!/bin/bash
-set -e # Exit immediately if a command exits with a non-zero status.
+set -e
 
 echo "--- [create-schema.sh] Applying database schema with retry loop ---"
 
-# This script will be run inside the google/cloud-sdk container,
-# so all necessary tools (gcloud, psql, cloud-sql-proxy) are already installed.
-# The DB_IP and PGPASSWORD will be passed in as environment variables from the workflow.
+# --- THIS IS THE FIX ---
+# Install the PostgreSQL client inside the container before trying to use it.
+echo "--- [create-schema.sh] Installing PostgreSQL client ---"
+apt-get update && apt-get install -y postgresql-client
 
 # Retry loop to wait for the database to become available
 echo "Waiting for database instance to accept connections..."

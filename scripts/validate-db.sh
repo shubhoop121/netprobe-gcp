@@ -9,7 +9,11 @@ echo "--- [validate-db.sh] Starting Cloud SQL Proxy ---"
 cloud-sql-proxy --ip-address-types=PRIVATE $DB_CONNECTION_NAME &
 sleep 5 # Wait for proxy to initialize
 
-# The psql client is also already in the container's PATH.
+# --- THIS IS THE FIX ---
+# Install the PostgreSQL client before trying to use it.
+echo "--- [validate-db.sh] Installing PostgreSQL client ---"
+apt-get update && apt-get install -y postgresql-client
+
 # The gcloud CLI is also pre-authenticated.
 echo "--- [validate-db.sh] Fetching database password ---"
 DB_PASS=$(gcloud secrets versions access latest --secret="db-password")
