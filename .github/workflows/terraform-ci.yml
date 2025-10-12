@@ -23,20 +23,16 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
-
       - name: "Authenticate to Google Cloud"
         uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
       - name: "Set up Terraform"
         uses: hashicorp/setup-terraform@v3
-
       - name: "Terraform Init"
         working-directory: ./infra/terraform
         run: terraform init
-
       - name: "Terraform Plan"
         working-directory: ./infra/terraform
         env:
@@ -57,48 +53,36 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
-
       - name: "Authenticate to Google Cloud"
-        id: auth
         uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
       - name: "Set up Terraform"
         uses: hashicorp/setup-terraform@v3
-
       - name: "Terraform Init"
         working-directory: ./infra/terraform
         run: terraform init
-
       - name: "Terraform Apply"
         working-directory: ./infra/terraform
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: terraform apply -auto-approve -var="nva_instance_count=2" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
       
-      - name: "Get Database IP"
-        id: get_db_ip
-        working-directory: ./infra/terraform
+      - name: "Create Database Schema"
+        uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
           args: -c "
             set -e
             echo '--- [Combined Step] Getting DB IP and applying schema... ---'
-            
-            # 1. Get the Database IP directly inside this step
             DB_IP=\$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip)
-            echo "--- Found Database IP: \$DB_IP --- "
+            echo '--- Found Database IP-- \$DB_IP ---'
 
-            # 2. Make the script executable
             chmod +x ./scripts/create-schema.sh
-            
-            # 3. Run the script, passing the IP we just found as an argument
             ./scripts/create-schema.sh \$DB_IP
             "
         env:
-          # Pass the password into the container for the script to use
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
 
   # ======================================================================================
@@ -115,26 +99,23 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
-
       - name: "Authenticate to Google Cloud"
         uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
       - name: "Set up Terraform"
         uses: hashicorp/setup-terraform@v3
-
       - name: "Terraform Init" 
         working-directory: ./infra/terraform
         run: terraform init
-
       - name: "Wait for NVA startup scripts"
         run: sleep 300
 
       - name: "Get Terraform Outputs"
         id: tf-outputs
         working-directory: ./infra/terraform
+        # THIS IS THE FIX to use the modern, robust output method
         run: |
           echo "workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_OUTPUT
           echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
@@ -142,9 +123,10 @@ jobs:
       
       - name: "Run Live Traffic Test"
         run: |
-          echo "--- Triggering traffic from workload VM: ${{ env.workload_vm_name }} ---"
-          gcloud compute ssh ${{ env.workload_vm_name }} \
-            --zone=${{ env.workload_vm_zone }} \
+          # This now correctly consumes the output from the previous step
+          echo "--- Triggering traffic from workload VM: ${{ steps.tf-outputs.outputs.workload_vm_name }} ---"
+          gcloud compute ssh ${{ steps.tf-outputs.outputs.workload_vm_name }} \
+            --zone=${{ steps.tf-outputs.outputs.workload_vm_zone }} \
             --tunnel-through-iap \
             --command="curl -v https://google.com"
 
