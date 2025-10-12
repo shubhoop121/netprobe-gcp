@@ -119,7 +119,7 @@ apply:
             chmod +x ./scripts/create-schema.sh && \
             export DB_IP=\$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip) && \
             ./scripts/create-schema.sh
-          "
+            "
         env:
           PGPASSWORD: ${{ secrets.DB_DB_PASSWORD }}
 
