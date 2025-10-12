@@ -81,16 +81,25 @@ jobs:
       - name: "Get Database IP"
         id: get_db_ip
         working-directory: ./infra/terraform
-        run: echo "db_ip=$(terraform output -raw netprobe_db_private_ip)" >> $GITHUB_OUTPUT
-
-      - name: "Create Database Schema"
-        uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: -c "chmod +x ./scripts/create-schema.sh && ./scripts/create-schema.sh ${{ steps.get_db_ip.outputs.db_ip }}"
+          args: -c "
+            set -e
+            echo '--- [Combined Step] Getting DB IP and applying schema... ---'
+            
+            # 1. Get the Database IP directly inside this step
+            DB_IP=\$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip)
+            echo \"--- Found Database IP: \$DB_IP --- \"
+
+            # 2. Make the script executable
+            chmod +x ./scripts/create-schema.sh
+            
+            # 3. Run the script, passing the IP we just found as an argument
+            ./scripts/create-schema.sh \$DB_IP
+            "
         env:
+          # Pass the password into the container for the script to use
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_IP: ${{ env.DB_IP }}
 
   # ======================================================================================
   # JOB 3: VALIDATE DEPLOYMENT (Runs after Apply on Merge to Main)
