@@ -69,19 +69,15 @@ jobs:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: terraform apply -auto-approve -var="nva_instance_count=2" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
       
+      - name: "Get Database IP and write to file"
+        working-directory: ./infra/terraform
+        run: terraform output -raw netprobe_db_private_ip > ./db_ip.txt
+
       - name: "Create Database Schema"
         uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: -c "
-            set -e
-            echo '--- [Combined Step] Getting DB IP and applying schema... ---'
-            DB_IP=\$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip)
-            echo '--- Found Database IP-- \$DB_IP ---'
-
-            chmod +x ./scripts/create-schema.sh
-            ./scripts/create-schema.sh \$DB_IP
-            "
+          args: -c "chmod +x ./scripts/create-schema.sh && ./scripts/create-schema.sh"
         env:
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
 
@@ -115,7 +111,6 @@ jobs:
       - name: "Get Terraform Outputs"
         id: tf-outputs
         working-directory: ./infra/terraform
-        # THIS IS THE FIX to use the modern, robust output method
         run: |
           echo "workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_OUTPUT
           echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
