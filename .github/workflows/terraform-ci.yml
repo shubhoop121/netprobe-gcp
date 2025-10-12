@@ -70,7 +70,8 @@ jobs:
         uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: -c "
+          args: |
+           -c "
             set -e
             cd ./infra/terraform
             
