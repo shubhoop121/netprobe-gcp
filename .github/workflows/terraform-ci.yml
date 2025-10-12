@@ -82,35 +82,39 @@ jobs:
         env:
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
-          echo "--- Applying database schema with retry loop ---"
+          echo "--- Applying database schema with proxy and retry loop ---"
           
-          # Install psql client
+          # Install psql client and download the proxy
           sudo apt-get update && sudo apt-get install -y postgresql-client
+          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64 && chmod +x cloud-sql-proxy
           
-          # Get the database IP from Terraform outputs
-          DB_IP=$(terraform output -raw netprobe_db_private_ip)
+          # Get the database CONNECTION NAME from Terraform outputs
+          DB_CONNECTION_NAME=$(terraform output -raw db_connection_name)
           
-          # Retry loop to wait for the database to become available
-          echo "Waiting for database instance to accept connections..."
+          # Start the proxy in the background. This creates the secure tunnel.
+          ./cloud-sql-proxy --ip-address-types=PRIVATE $DB_CONNECTION_NAME &
+          
+          # Retry loop to wait for the PROXY to become available locally
+          echo "Waiting for Cloud SQL Proxy to be ready on localhost..."
           for i in {1..10}; do
-            # Use pg_isready for a quick, clean check
-            if pg_isready -h $DB_IP -U netprobe_user -d netprobe_logs; then
-              echo "✅ Database is ready."
+            # Use pg_isready to check the LOCAL proxy port
+            if pg_isready -h 127.0.0.1 -U netprobe_user -d netprobe_logs; then
+              echo "✅ Proxy is ready and connected to the database."
               break
             fi
-            echo "Attempt $i/10 failed. Waiting 30 seconds..."
-            sleep 30
+            echo "Attempt $i/10 failed. Waiting 15 seconds..."
+            sleep 15
           done
 
           # Final check after the loop
-          if ! pg_isready -h $DB_IP -U netprobe_user -d netprobe_logs; then
-            echo "❌ Database did not become ready after 5 minutes."
+          if ! pg_isready -h 127.0.0.1 -U netprobe_user -d netprobe_logs; then
+            echo "❌ Cloud SQL Proxy did not become ready after 2.5 minutes."
             exit 1
           fi
 
-          # Now that we know it's ready, run the CREATE TABLE command
-          echo "--- Database is ready. Applying schema. ---"
-          psql --host=$DB_IP --username=netprobe_user --dbname=netprobe_logs <<-EOF
+          # Now that we know the tunnel is up, run the CREATE TABLE command through it
+          echo "--- Proxy is ready. Applying schema. ---"
+          psql --host=127.0.0.1 --username=netprobe_user --dbname=netprobe_logs <<-EOF
             CREATE TABLE connections (
                 id SERIAL PRIMARY KEY,
                 ts TIMESTAMP WITH TIME ZONE NOT NULL,
