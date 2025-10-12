@@ -27,7 +27,6 @@ resource "google_compute_firewall" "allow_workload_to_nva" {
   name    = "netprobe-allow-workload-to-nva"
   network = google_compute_network.main.name
   
-  # We allow all protocols to ensure TCP, UDP, ICMP etc. can be inspected.
   allow {
     protocol = "all"
   }
