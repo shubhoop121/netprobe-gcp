@@ -89,7 +89,7 @@ jobs:
             echo \"--- Found Database IP- \$DB_IP ---\"
             chmod +x ../../scripts/create-schema.sh
             ../../scripts/create-schema.sh \$DB_IP
-          "
+            "
         env:
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
 
