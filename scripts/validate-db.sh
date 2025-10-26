@@ -14,6 +14,8 @@ DB_PASS=$(gcloud secrets versions access latest --secret="db-password")
 export PGPASSWORD=$DB_PASS
 
 echo "--- [validate-db.sh] Connecting via gcloud and querying database ---"
+echo "--- DEBUG: Checking PGPASSWORD environment variable ---"
+echo "PGPASSWORD=[$PGPASSWORD]"
 RESULT=$(gcloud sql connect $DB_INSTANCE_NAME --user=netprobe_user --quiet -- <<EOF
   SELECT COUNT(*) FROM connections;
 EOF
