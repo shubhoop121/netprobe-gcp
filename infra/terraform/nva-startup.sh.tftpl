@@ -61,26 +61,15 @@ echo "--- COMPLETED: Source NAT ---"
 
 # --- PHASE 9: Deploy and Configure Log Shipper (Your new feature) ---
 echo "--- PHASE 9: Deploying Log Shipper ---"
-# Install dependencies
 sudo apt-get install -y git python3-pip
 sudo python3 -m pip install psycopg2-binary
 
-# Retrieve secrets from GCP Secret Manager
 DB_PASS=$(gcloud secrets versions access latest --secret="db-password" --project="${project_id}")
 GITHUB_PAT=$(gcloud secrets versions access latest --secret="github-pat" --project="${project_id}")
 DB_PRIVATE_IP="${db_private_ip}"
 
-echo "--- START PASSWORD AUDIT ---"
-echo "Password from GCP Secret Manager ('db-password'): [$${DB_PASS}]"
-echo "Password from Terraform/GitHub Secret ('DB_PASSWORD'): [${terraform_db_pass}]"
-echo "--- END PASSWORD AUDIT ---"
-
-# Clone the application repository, checking out the specific branch from the CI/CD job
-# THIS IS THE GIT CLONE PART:
 sudo git clone -b ${branch_name} https://oauth2:$${GITHUB_PAT}@github.com/shubhoop121/netprobe-gcp.git /opt/netprobe
 
-# Set up and configure the systemd service file
-# Replace placeholder values in the template with our secrets and config
 sudo sed -e "s/Environment=\"DB_HOST=\"/Environment=\"DB_HOST=$${DB_PRIVATE_IP}\"/" \
     -e "s/Environment=\"DB_NAME=\"/Environment=\"DB_NAME=netprobe_logs\"/" \
     -e "s/Environment=\"DB_USER=\"/Environment=\"DB_USER=netprobe_user\"/" \
