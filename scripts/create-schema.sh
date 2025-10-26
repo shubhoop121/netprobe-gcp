@@ -5,7 +5,7 @@ DB_INSTANCE_NAME="netprobe-db"
 
 echo "--- [create-schema.sh] Applying schema to instance: $DB_INSTANCE_NAME ---"
 echo "--- [create-schema.sh] Installing Cloud SQL Proxy component ---"
-gcloud components install cloud_sql_proxy -q
+gcloud components install cloud-sql-proxy -q
 echo "--- [create-schema.sh] Installing PostgreSQL client ---"
 apt-get update && apt-get install -y postgresql-client
 echo "--- [create-schema.sh] Connecting via gcloud and applying schema ---"
