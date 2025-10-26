@@ -36,7 +36,7 @@ resource "google_sql_database_instance" "netprobe_db" {
     deletion_protection_enabled = false # Allow easy teardown with `terraform destroy`.
 
     ip_configuration {
-      ipv4_enabled    = false # No public IP for security.
+      ipv4_enabled    = true
       private_network = google_compute_network.main.id
     }
 
