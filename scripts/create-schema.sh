@@ -11,6 +11,7 @@ echo "--- [create-schema.sh] Applying schema to instance: $DB_CONNECTION_NAME --
 
 echo "--- [create-schema.sh] Installing PostgreSQL client ---"
 apt-get update && apt-get install -y postgresql-client
+gcloud components install cloud_sql_proxy -q
 
 echo "--- [create-schema.sh] Starting Cloud SQL Proxy ---"
 cloud-sql-proxy --ip-address-types=PRIVATE $DB_CONNECTION_NAME &
