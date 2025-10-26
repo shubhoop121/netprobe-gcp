@@ -3,10 +3,13 @@
 set -euo pipefail
 trap 'echo "[ERROR] Validation failed at line $LINENO"; exit 1' ERR
 
-DB_INSTANCE_NAME="netprobe-db"
-
+DB_CONNECTION_NAME=$1
+if [ -z "$DB_CONNECTION_NAME" ]; then
+  echo "Error: Database connection name was not provided."
+  exit 1
+fi
 echo "--- [validate-db.sh] Starting validation for instance: $DB_INSTANCE_NAME ---"
-sleep 60 # Wait for shipper
+sleep 60
 
 echo "--- [validate-db.sh] Installing PostgreSQL client & Downloading Proxy ---"
 apt-get update && apt-get install -y postgresql-client curl
@@ -15,7 +18,7 @@ chmod +x cloud-sql-proxy
 ./cloud-sql-proxy --version
 
 echo "--- [validate-db.sh] Starting Cloud SQL Proxy ---"
-./cloud-sql-proxy --private-ip $DB_INSTANCE_NAME &
+./cloud-sql-proxy --private-ip $DB_CONNECTION_NAME &
 PROXY_PID=$!
 sleep 5
 
@@ -29,7 +32,7 @@ COUNT=$(echo $RESULT | xargs)
 
 echo "Found $COUNT records in the connections table."
 if (( COUNT > 0 )); then
-  echo "✅ Validation successful."
+  echo "Validation successful."
 else
   echo "Validation failed."
   exit 1

@@ -3,7 +3,11 @@
 set -euo pipefail
 trap 'echo "[ERROR] Schema creation failed at line $LINENO"; exit 1' ERR
 
-DB_INSTANCE_NAME="netprobe-db"
+DB_CONNECTION_NAME=$1 # Changed variable name for clarity
+if [ -z "$DB_CONNECTION_NAME" ]; then
+  echo "Error: Database connection name was not provided."
+  exit 1
+fi
 
 echo "--- [create-schema.sh] Applying schema to instance: $DB_INSTANCE_NAME ---"
 echo "--- [create-schema.sh] Installing PostgreSQL client & Downloading Proxy ---"
@@ -13,7 +17,7 @@ chmod +x cloud-sql-proxy
 ./cloud-sql-proxy --version
 
 echo "--- [create-schema.sh] Starting Cloud SQL Proxy ---"
-./cloud-sql-proxy --private-ip $DB_INSTANCE_NAME &
+./cloud-sql-proxy --private-ip $DB_CONNECTION_NAME &
 PROXY_PID=$!
 sleep 5
 
