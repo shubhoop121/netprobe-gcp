@@ -12,7 +12,7 @@ echo "--- [create-schema.sh] Connecting via gcloud and applying schema ---"
 echo "--- DEBUG: Checking PGPASSWORD environment variable ---"
 echo "PGPASSWORD=[$PGPASSWORD]"
 
-gcloud sql connect $DB_INSTANCE_NAME --user=netprobe_user --verbosity=debug <<-EOF
+gcloud sql connect $DB_INSTANCE_NAME --user=netprobe_user --private-ip --verbosity=debug <<-EOF
   CREATE TABLE connections ( id SERIAL PRIMARY KEY, ts TIMESTAMP WITH TIME ZONE NOT NULL, uid VARCHAR(255) UNIQUE NOT NULL, source_ip INET NOT NULL, source_port INTEGER NOT NULL, destination_ip INET NOT NULL, destination_port INTEGER NOT NULL, proto VARCHAR(6), service VARCHAR(255), duration FLOAT, orig_bytes BIGINT, resp_bytes BIGINT, conn_state VARCHAR(10), logged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() );
 EOF
 echo "--- Schema applied successfully ---"
