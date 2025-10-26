@@ -128,7 +128,7 @@ jobs:
         uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: -c "chmod +x ./scripts/validate-db.sh && ./scripts/validate-db.sh ${{ steps.tf-outputs.outputs.db_connection_name }}"
+          args: -c "chmod +x ./scripts/validate-db.sh && ./scripts/validate-db.sh"
 
       - name: "Cleanup Test VM"
         if: always()
