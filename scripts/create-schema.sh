@@ -9,7 +9,7 @@ if [ -z "$DB_CONNECTION_NAME" ]; then
   exit 1
 fi
 
-echo "--- [create-schema.sh] Applying schema to instance: $DB_INSTANCE_NAME ---"
+echo "--- [create-schema.sh] Applying schema to instance: $DB_CONNECTION_NAME ---"
 echo "--- [create-schema.sh] Installing PostgreSQL client & Downloading Proxy ---"
 apt-get update && apt-get install -y postgresql-client curl
 curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64

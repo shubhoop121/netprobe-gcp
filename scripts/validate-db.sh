@@ -8,7 +8,7 @@ if [ -z "$DB_CONNECTION_NAME" ]; then
   echo "Error: Database connection name was not provided."
   exit 1
 fi
-echo "--- [validate-db.sh] Starting validation for instance: $DB_INSTANCE_NAME ---"
+echo "--- [validate-db.sh] Starting validation for instance: $DB_CONNECTION_NAME ---"
 sleep 60
 
 echo "--- [validate-db.sh] Installing PostgreSQL client & Downloading Proxy ---"
