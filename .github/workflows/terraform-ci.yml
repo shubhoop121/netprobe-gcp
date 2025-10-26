@@ -9,6 +9,10 @@ on:
       - main
 
 jobs:
+  # ======================================================================================
+  # JOB 1: TERRAFORM PLAN
+  # Runs on the native runner for stability and speed.
+  # ======================================================================================
   plan:
     name: "Terraform Plan on PR"
     if: github.event_name == 'pull_request'
@@ -16,51 +20,72 @@ jobs:
     permissions:
       contents: "read"
       id-token: "write"
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: "google-github-actions/auth@v2"
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+      - name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-      - name: "Run Terraform Plan in Cloud SDK Container"
-        uses: docker://google/cloud-sdk:latest
-        with:
-          entrypoint: /bin/bash
-          args: -c "chmod +x ./scripts/run-plan-job.sh && ./scripts/run-plan-job.sh"
+      - name: "Set up Terraform"
+        uses: hashicorp/setup-terraform@v3
+      - name: "Terraform Init"
+        working-directory: ./infra/terraform
+        run: terraform init
+      - name: "Terraform Plan"
+        working-directory: ./infra/terraform
         env:
           TF_VAR_db_password: "dummy-password-for-plan"
-          # Pass GitHub context variables into the container for the script to use
-          GITHUB_HEAD_REF: ${{ github.head_ref }}
-          GITHUB_PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-
+        run: terraform plan -input=false -var="nva_instance_count=1" -var="branch_name=${{ github.head_ref }}" -var="app_version=${{ github.event.pull_request.head.sha }}" -var-file="terraform.tfvars"
+  
+  # ======================================================================================
+  # JOB 2: TERRAFORM APPLY
+  # Also runs on the native runner. Then uses the container for the schema script.
+  # ======================================================================================
   apply:
-    name: "Terraform Apply & Create Schema"
+    name: "Terraform Apply to Main"
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: "read"
       id-token: "write"
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: "google-github-actions/auth@v2"
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+      - name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-      - name: "Run Apply & Create Schema in Cloud SDK Container"
+      - name: "Set up Terraform"
+        uses: hashicorp/setup-terraform@v3
+      - name: "Terraform Init"
+        working-directory: ./infra/terraform
+        run: terraform init
+      - name: "Terraform Apply"
+        working-directory: ./infra/terraform
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+        run: terraform apply -auto-approve -var="nva_instance_count=2" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
+      
+      - name: "Get Database IP"
+        id: get_db_ip
+        working-directory: ./infra/terraform
+        run: echo "db_ip=$(terraform output -raw netprobe_db_private_ip)" >> $GITHUB_OUTPUT
+
+      - name: "Create Database Schema"
         uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: -c "chmod +x ./scripts/run-apply-job.sh && ./scripts/run-apply-job.sh"
+          args: -c "chmod +x ./scripts/create-schema.sh && ./scripts/create-schema.sh ${{ steps.get_db_ip.outputs.db_ip }}"
         env:
-          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
-          # Pass GitHub context variables into the container for the script to use
-          GITHUB_SHA: ${{ github.sha }}
-          
-  # ... (The validate and cleanup jobs should be updated to follow this same script-based pattern) ...
-  
+
   # ======================================================================================
-  # JOB 3: VALIDATE DEPLOYMENT (Runs after Apply)
+  # JOB 3: VALIDATE DEPLOYMENT
   # ======================================================================================
   validate:
     name: "Validate Deployment"
@@ -73,61 +98,43 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
-
       - name: "Authenticate to Google Cloud"
         uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-      - name: "Run E2E Tests in Cloud SDK Container"
+      - name: "Set up Terraform"
+        uses: hashicorp/setup-terraform@v3
+      - name: "Terraform Init" 
+        working-directory: ./infra/terraform
+        run: terraform init
+      - name: "Wait for NVA startup scripts"
+        run: sleep 300
+      - name: "Get Terraform Outputs"
+        id: tf-outputs
+        working-directory: ./infra/terraform
+        run: |
+          echo "workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_OUTPUT
+          echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
+          echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
+      
+      - name: "Run Live Traffic Test"
         uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: |
-            -c "
-            set -e
-            cd ./infra/terraform
+          args: -c "gcloud compute ssh ${{ steps.tf-outputs.outputs.workload_vm_name }} --zone=${{ steps.tf-outputs.outputs.workload_vm_zone }} --tunnel-through-iap --command='curl -v https://google.com'"
 
-            echo '--- [VALIDATE] Waiting for NVA startup... ---'
-            sleep 300
-
-            echo '--- [VALIDATE] Installing Terraform to get outputs... ---'
-            apt-get update && apt-get install -y gnupg software-properties-common curl
-            curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add -
-            apt-add-repository 'deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main'
-            apt-get update && apt-get install -y terraform
-            terraform init
-
-            WORKLOAD_VM_NAME=\$(terraform output -raw test_workload_vm_name)
-            WORKLOAD_VM_ZONE=\$(terraform output -raw test_workload_vm_zone)
-            DB_CONNECTION_NAME=\$(terraform output -raw db_connection_name)
-
-            echo \"--- [VALIDATE] Triggering traffic from workload VM: \$WORKLOAD_VM_NAME ---\"
-            gcloud compute ssh \$WORKLOAD_VM_NAME --zone=\$WORKLOAD_VM_ZONE --tunnel-through-iap --command='curl -v https://google.com'
-
-            echo '--- [VALIDATE] Validating database records... ---'
-            chmod +x ../../scripts/validate-db.sh
-            ../../scripts/validate-db.sh \$DB_CONNECTION_NAME
-            "
+      - name: "Validate Database Records"
+        uses: docker://google/cloud-sdk:latest
+        with:
+          entrypoint: /bin/bash
+          args: -c "chmod +x ./scripts/validate-db.sh && ./scripts/validate-db.sh ${{ steps.tf-outputs.outputs.db_connection_name }}"
 
       - name: "Cleanup Test VM"
         if: always()
-        uses: docker://google/cloud-sdk:latest
-        with:
-          entrypoint: /bin/bash
-          args: -c "
-            set -e
-            echo '--- [CLEANUP] Installing Terraform ---'
-            apt-get update && apt-get install -y gnupg software-properties-common curl
-            curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add -
-            apt-add-repository 'deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main'
-            apt-get update && apt-get install -y terraform
-
-            echo '--- [CLEANUP] Destroying Test VM ---'
-            cd ./infra/terraform
-            terraform init
-            terraform destroy -auto-approve -target=google_compute_instance.test_workload[0]
-            "
+        working-directory: ./infra/terraform
         env:
           TF_VAR_db_password: "dummy-password-for-cleanup"
+        run: |
+          terraform init 
+          terraform destroy -auto-approve -target=google_compute_instance.test_workload[0]
