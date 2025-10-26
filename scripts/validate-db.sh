@@ -5,7 +5,8 @@ DB_INSTANCE_NAME="netprobe-db"
 
 echo "--- [validate-db.sh] Starting validation for instance: $DB_INSTANCE_NAME ---"
 sleep 60
-
+echo "--- [create-schema.sh] Installing Cloud SQL Proxy component ---"
+gcloud components install cloud_sql_proxy -q
 echo "--- [validate-db.sh] Installing PostgreSQL client ---"
 apt-get update && apt-get install -y postgresql-client
 
