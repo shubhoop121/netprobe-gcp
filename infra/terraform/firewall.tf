@@ -34,3 +34,16 @@ resource "google_compute_firewall" "allow_workload_to_nva" {
   source_tags = ["workload"]
   target_tags = ["nva"]
 }
+
+
+resource "google_compute_firewall" "allow_sql_proxy_ingress" {
+  name    = "netprobe-allow-sql-proxy"
+  network = google_compute_network.main.name
+  
+  source_ranges = ["${google_compute_global_address.private_service_access.address}/${google_compute_global_address.private_service_access.prefix_length}"]
+
+  allow {
+    protocol = "tcp"
+    ports    = ["3307"] 
+  }
+}
