@@ -15,7 +15,8 @@ sleep 5
 # Install the PostgreSQL client before trying to use it.
 echo "--- [validate-db.sh] Installing PostgreSQL client ---"
 apt-get update && apt-get install -y postgresql-client
-gcloud components install cloud_sql_proxy -q
+curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64
+chmod +x cloud-sql-proxy
 
 # The gcloud CLI is also pre-authenticated.
 echo "--- [validate-db.sh] Fetching database password ---"
