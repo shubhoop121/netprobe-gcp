@@ -9,7 +9,7 @@ sleep 60
 
 # Start the proxy
 echo "--- [validate-db.sh] Starting Cloud SQL Proxy ---"
-cloud-sql-proxy --ip-address-types=PRIVATE $DB_CONNECTION_NAME &
+./cloud-sql-proxy --private-ip $DB_CONNECTION_NAME &
 sleep 5
 
 # Install the PostgreSQL client before trying to use it.

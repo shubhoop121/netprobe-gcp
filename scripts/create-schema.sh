@@ -15,7 +15,7 @@ curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/clou
 chmod +x cloud-sql-proxy
 
 echo "--- [create-schema.sh] Starting Cloud SQL Proxy ---"
-./cloud-sql-proxy --ip-address-types=PRIVATE $DB_CONNECTION_NAME &
+./cloud-sql-proxy --private-ip $DB_CONNECTION_NAME &
 sleep 5
 
 echo "Waiting for proxy to accept connections on localhost..."
