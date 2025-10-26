@@ -71,16 +71,16 @@ jobs:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: terraform apply -auto-approve -var="nva_instance_count=2" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
       
-      - name: "Get Database IP"
-        id: get_db_ip
+      - name: "Get Database Connection Name"
+        id: get_db_info
         working-directory: ./infra/terraform
-        run: echo "db_ip=$(terraform output -raw netprobe_db_private_ip)" >> $GITHUB_OUTPUT
+        run: echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
 
       - name: "Create Database Schema"
         uses: docker://google/cloud-sdk:latest
         with:
           entrypoint: /bin/bash
-          args: -c "chmod +x ./scripts/create-schema.sh && ./scripts/create-schema.sh ${{ steps.get_db_ip.outputs.db_ip }}"
+          args: -c "chmod +x ./scripts/create-schema.sh && ./scripts/create-schema.sh ${{ steps.get_db_info.outputs.db_connection_name }}"
         env:
           PGPASSWORD: ${{ secrets.DB_PASSWORD }}
 
