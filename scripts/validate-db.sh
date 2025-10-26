@@ -1,5 +1,5 @@
 #!/bin/bash
-# Exit on error, treat unset variables as errors, propagate exit codes
+
 set -euo pipefail
 trap 'echo "[ERROR] Validation failed at line $LINENO"; exit 1' ERR
 
