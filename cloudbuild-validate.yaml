@@ -1,0 +1,42 @@
+steps:
+  # Step 1: Install psql
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "--- Installing psql ---"
+        apt-get update && apt-get install -y postgresql-client
+
+  # Step 2: Connect via gcloud and run validation query
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "--- [validate] Connecting via gcloud and querying database ---"
+        # Use gcloud alpha sql connect with the private IP flag
+        RESULT=$(gcloud alpha sql connect netprobe-db --user=netprobe_user --private-ip --quiet -- <<EOF
+          SELECT COUNT(*) FROM connections;
+        EOF
+        )
+        COUNT=$(echo $RESULT | xargs)
+
+        echo "Found $COUNT records in the connections table."
+        if (( COUNT > 0 )); then
+          echo "Validation successful."
+          exit 0
+        else
+          echo "Validation failed: No records found."
+          exit 1
+        fi
+    secretEnv: ['PGPASSWORD']
+
+# Define the secret to be made available
+availableSecrets:
+  secretManager:
+  - versionName: projects/netprobe-473119/secrets/db-password/versions/latest
+    env: 'PGPASSWORD'
+
+# Timeout
+timeout: '300s'
