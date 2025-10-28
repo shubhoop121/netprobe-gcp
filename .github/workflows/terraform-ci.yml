@@ -121,9 +121,7 @@ jobs:
             --command="curl -v https://google.com"
 
       - name: "Trigger Cloud Build for Validation"
-        uses: 'google-github-actions/setup-gcloud@v2'
-
-      - run: 'gcloud builds submit --config=cloudbuild-validate.yaml --project=netprobe-473119'
+        run: 'gcloud builds submit --config=cloudbuild-validate.yaml --project=netprobe-473119 --quiet'
 
       - name: "Cleanup Test VM"
         if: always()
@@ -132,4 +130,4 @@ jobs:
           TF_VAR_db_password: "dummy-password-for-cleanup"
         run: |
           terraform init 
-          terraform destroy -auto-approve -target=google_compute_instance.test_workload[0]
+          terraform destroy -auto-approve -target=google_compute_instance.test_workload[0] -var="app_version=cleanup-${{ github.run_id }}" -var="branch_name=cleanup"
