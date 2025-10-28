@@ -10,15 +10,13 @@ steps:
   # Step 2: Start Proxy & Validate Records (Uses substitutions directly)
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'validate_records'
-    # REMOVED the env: block
     entrypoint: 'bash'
-    # UPDATED args to use ${_VARIABLE} directly
     args:
       - '-c'
       - |
         set -e
         # Construct connection name using substitutions directly
-        DB_CONNECTION_NAME="projects/${PROJECT_ID}/locations/${_SQL_REGION}/instances/${_SQL_INSTANCE_NAME}"
+        DB_CONNECTION_NAME=$(cat ./infra/terraform/db_conn_name.txt)
 
         echo "--- Starting Cloud SQL Proxy for $DB_CONNECTION_NAME ---"
         ./cloud-sql-proxy --private-ip "$DB_CONNECTION_NAME" &
