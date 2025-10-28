@@ -1,0 +1,46 @@
+steps:
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "--- Installing psql ---"
+        apt-get update && apt-get install -y postgresql-client
+
+  # Step 2: Connect via gcloud and apply schema
+  # Cloud Build runs within GCP and can often reach private IPs
+  # It also uses its own service account for authentication
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "--- Applying schema to instance: netprobe-db ---"
+        gcloud alpha sql connect netprobe-db --user=netprobe_user --private-ip <<-EOF
+          CREATE TABLE connections (
+              id SERIAL PRIMARY KEY,
+              ts TIMESTAMP WITH TIME ZONE NOT NULL,
+              uid VARCHAR(255) UNIQUE NOT NULL,
+              source_ip INET NOT NULL,
+              source_port INTEGER NOT NULL,
+              destination_ip INET NOT NULL,
+              destination_port INTEGER NOT NULL,
+              proto VARCHAR(6),
+              service VARCHAR(255),
+              duration FLOAT,
+              orig_bytes BIGINT,
+              resp_bytes BIGINT,
+              conn_state VARCHAR(10),
+              logged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+        EOF
+        echo "--- Schema applied successfully ---"
+    secretEnv: ['PGPASSWORD']
+
+# Define the secret to be made available (maps to PGPASSWORD env var)
+availableSecrets:
+  secretManager:
+  - versionName: projects/netprobe-473119/secrets/db-password/versions/latest
+    env: 'PGPASSWORD'
+
+timeout: '600s'

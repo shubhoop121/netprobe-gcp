@@ -69,20 +69,14 @@ jobs:
         working-directory: ./infra/terraform
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-        run: terraform apply -auto-approve -var="nva_instance_count=2" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
+        run: terraform apply -auto-approve -var="nva_instance_count=1" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
       
-      - name: "Get Database Connection Name"
-        id: get_db_info
-        working-directory: ./infra/terraform
-        run: echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
-
-      - name: "Create Database Schema"
-        uses: docker://google/cloud-sdk:latest
+      - name: "Trigger Cloud Build for Schema Creation"
+        uses: google-github-actions/submit-cloud-build@v2
         with:
-          entrypoint: /bin/bash
-          args: -c "chmod +x ./scripts/create-schema.sh && ./scripts/create-schema.sh ${{ steps.get_db_info.outputs.db_connection_name }}"
-        env:
-          PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+          project: 'netprobe-473119'
+          config: 'cloudbuild-schema.yaml'
+          substitutions: ''
 
   # ======================================================================================
   # JOB 3: VALIDATE DEPLOYMENT
