@@ -24,7 +24,7 @@ steps:
         sleep 5
 
         echo "Waiting for proxy (PID $PROXY_PID) to accept connections on localhost..."
-        if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 5; then echo "❌ Proxy timed out."; kill $PROXY_PID 2>/dev/null || true; exit 1; fi
+        if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 5; then echo "Proxy timed out."; kill $PROXY_PID 2>/dev/null || true; exit 1; fi
 
         echo "--- Querying database via proxy ---"
         # Use substitutions directly for user and dbname
@@ -33,8 +33,8 @@ steps:
 
         echo "Found $COUNT records."
         kill $PROXY_PID
-        if (( COUNT > 0 )); then echo "✅ Validation successful."; exit 0;
-        else echo "❌ Validation failed."; exit 1; fi
+        if (( COUNT > 0 )); then echo "Validation successful."; exit 0;
+        else echo "Validation failed."; exit 1; fi
     secretEnv: ['PGPASSWORD']
 
 # Define substitutions (Remain the same)

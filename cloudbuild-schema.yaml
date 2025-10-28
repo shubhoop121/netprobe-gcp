@@ -32,11 +32,11 @@ steps:
         echo "Waiting for proxy (PID $PROXY_PID) to accept connections on localhost..."
         for i in {1..10}; do
           # Use substitutions directly for user and dbname
-          if pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}"; then echo "✅ Proxy ready."; break; fi
-          if ! ps -p $PROXY_PID > /dev/null; then echo "❌ Proxy died!"; exit 1; fi
+          if pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}"; then echo "Proxy ready."; break; fi
+          if ! ps -p $PROXY_PID > /dev/null; then echo "Proxy died!"; exit 1; fi
           echo "Attempt $i/10 failed. Waiting 15s..."; sleep 15
         done
-        if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}"; then echo "❌ Proxy timed out."; kill $PROXY_PID 2>/dev/null || true; exit 1; fi
+        if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}"; then echo "Proxy timed out."; kill $PROXY_PID 2>/dev/null || true; exit 1; fi
 
         echo "--- Applying schema via proxy ---"
         # Use substitutions directly for user and dbname
