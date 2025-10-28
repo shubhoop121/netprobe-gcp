@@ -101,7 +101,7 @@ jobs:
         working-directory: ./infra/terraform
         run: terraform init
       - name: "Wait for NVA startup scripts"
-        run: sleep 300
+        run: sleep 60
       - name: "Get Terraform Outputs"
         id: tf-outputs
         working-directory: ./infra/terraform
