@@ -1,62 +1,52 @@
 steps:
-  # Step 1: Install psql client & Download Proxy
+  # Step 1: Install tools (No changes needed here)
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'setup_tools'
+    # ... (same as schema file) ...
     entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        set -e
-        echo "--- Installing psql & Downloading Proxy ---"
-        apt-get update && apt-get install -y postgresql-client curl
-        curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64
-        chmod +x cloud-sql-proxy
-        ./cloud-sql-proxy --version
+    args: ['-c', 'set -e; echo "--- Installing tools ---"; apt-get update && apt-get install -y postgresql-client curl; curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64; chmod +x cloud-sql-proxy; ./cloud-sql-proxy --version']
 
-  # Step 2: Start Proxy & Validate Records
+
+  # Step 2: Start Proxy & Validate Records (Uses substitutions directly)
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'validate_records'
-    env:
-      - 'SQL_REGION=${_SQL_REGION}'
-      - 'SQL_INSTANCE_NAME=${_SQL_INSTANCE_NAME}'
-      - 'SQL_USER=${_SQL_USER}'
-      - 'SQL_DBNAME=${_SQL_DBNAME}'
-    # --- END FIX ---
+    # REMOVED the env: block
     entrypoint: 'bash'
+    # UPDATED args to use ${_VARIABLE} directly
     args:
       - '-c'
       - |
         set -e
-        DB_CONNECTION_NAME="projects/${PROJECT_ID}/locations/${SQL_REGION}/instances/${SQL_INSTANCE_NAME}"
+        # Construct connection name using substitutions directly
+        DB_CONNECTION_NAME="projects/${PROJECT_ID}/locations/${_SQL_REGION}/instances/${_SQL_INSTANCE_NAME}"
 
         echo "--- Starting Cloud SQL Proxy for $DB_CONNECTION_NAME ---"
-        ./cloud-sql-proxy --private-ip $DB_CONNECTION_NAME &
+        ./cloud-sql-proxy --private-ip "$DB_CONNECTION_NAME" &
         PROXY_PID=$!
         sleep 5
 
         echo "Waiting for proxy (PID $PROXY_PID) to accept connections on localhost..."
-        if ! pg_isready -h 127.0.0.1 -U $SQL_USER -d $SQL_DBNAME -t 5; then
-           echo "Proxy did not become ready quickly."; kill $PROXY_PID 2>/dev/null || true; exit 1;
-        fi
+        if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 5; then echo "❌ Proxy timed out."; kill $PROXY_PID 2>/dev/null || true; exit 1; fi
 
         echo "--- Querying database via proxy ---"
-        RESULT=$(psql --host=127.0.0.1 --username=$SQL_USER --dbname=$SQL_DBNAME -t -c "SELECT COUNT(*) FROM connections;")
+        # Use substitutions directly for user and dbname
+        RESULT=$(psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT COUNT(*) FROM connections;")
         COUNT=$(echo $RESULT | xargs)
 
         echo "Found $COUNT records."
         kill $PROXY_PID
-        if (( COUNT > 0 )); then echo "Validation successful."; exit 0;
-        else echo "Validation failed."; exit 1; fi
+        if (( COUNT > 0 )); then echo "✅ Validation successful."; exit 0;
+        else echo "❌ Validation failed."; exit 1; fi
     secretEnv: ['PGPASSWORD']
 
-# Define substitutions (These remain the same)
+# Define substitutions (Remain the same)
 substitutions:
   _SQL_REGION: 'asia-south1'
   _SQL_INSTANCE_NAME: 'netprobe-db'
   _SQL_USER: 'netprobe_user'
   _SQL_DBNAME: 'netprobe_logs'
 
-# Make the password secret available (Remains the same)
+# Make secret available (Remains the same)
 availableSecrets:
   secretManager:
   - versionName: projects/${PROJECT_ID}/secrets/db-password/versions/latest
