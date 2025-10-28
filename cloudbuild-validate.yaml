@@ -1,5 +1,4 @@
 steps:
-  # Step 1: Install psql
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
     args:
@@ -15,19 +14,11 @@ steps:
       - |
         set -e
         echo "--- [validate] Connecting via gcloud and querying database ---"
-        COUNT=$(gcloud alpha sql connect netprobe-db --user=netprobe_user --private-ip --quiet -- <<EOF | xargs
-          SELECT COUNT(*) FROM connections;
-        EOF
-        )
+        gcloud alpha sql connect netprobe-db --user=netprobe_user --private-ip --quiet -- \
+          psql -qtAX --dbname=netprobe_logs -c "SELECT COUNT(*) FROM connections WHERE COUNT(*) > 0;" \
+          || (echo 'Validation failed: No records found.' && exit 1)
 
-        echo "Found $COUNT records in the connections table."
-        if (( COUNT > 0 )); then
-          echo "Validation successful."
-          exit 0
-        else
-          echo "Validation failed: No records found."
-          exit 1
-        fi
+        echo "Validation successful: Records found in the database."
     secretEnv: ['PGPASSWORD']
 
 availableSecrets:
