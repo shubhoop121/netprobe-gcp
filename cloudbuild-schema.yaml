@@ -1,26 +1,26 @@
 steps:
-  # Step 1: Install tools (No changes needed here)
+  # Step 1: Install tools
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'setup_tools'
     entrypoint: 'bash'
-    args: ['-c', 'set -e; echo "--- Installing tools ---"; apt-get update && apt-get install -y postgresql-client curl; curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64; chmod +x cloud-sql-proxy; ./cloud-sql-proxy --version']
+    args: ['-c', 'set -e; apt-get update && apt-get install -y postgresql-client curl; curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64; chmod +x cloud-sql-proxy']
 
-  # Step 2: Start Proxy & Apply Schema (Uses substitutions directly)
+  # Step 2: Start Proxy & Apply Schema
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'apply_schema'
     entrypoint: 'bash'
+    automapSubstitutions: true
     args:
         - '-c'
         - |
           set -e
           DB_CONNECTION_NAME="projects/${PROJECT_ID}/locations/${_SQL_REGION}/instances/${_SQL_INSTANCE_NAME}"
 
-          echo "--- Starting Cloud SQL Proxy for $DB_CONNECTION_NAME ---"
+          echo "--- Starting Cloud SQL Proxy for ${DB_CONNECTION_NAME} ---"
           ./cloud-sql-proxy --private-ip "$DB_CONNECTION_NAME" &
           sleep 5
 
           echo "Waiting for proxy..."
-          # Simplified check, assuming it starts quickly now
           if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 15; then
             echo "Proxy did not become ready quickly."
             pkill -f cloud-sql-proxy || true
@@ -29,11 +29,10 @@ steps:
 
           echo "--- Applying schema ---"
           psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" <<-EOF
-            CREATE TABLE connections ( ... ); # Truncated
+            CREATE TABLE connections ( ... );
           EOF
           echo "--- Schema applied successfully ---"
 
-          # Kill the proxy process by name
           echo "--- Shutting down proxy ---"
           pkill -f cloud-sql-proxy || echo "Proxy already stopped."
 
@@ -43,7 +42,6 @@ substitutions:
   _SQL_USER: 'netprobe_user'
   _SQL_DBNAME: 'netprobe_logs'
 
-# Make secret available (Remains the same)
 availableSecrets:
   secretManager:
   - versionName: projects/${PROJECT_ID}/secrets/db-password/versions/latest
