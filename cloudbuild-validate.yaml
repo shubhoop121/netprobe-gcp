@@ -20,22 +20,16 @@ steps:
           sleep 5
 
           echo "Waiting for proxy..."
-          if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 15; then
-            echo "Proxy did not become ready quickly."
-            pkill -f cloud-sql-proxy || true
+          if psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT 1 FROM connections LIMIT 1;" | grep -q 1; then
+            echo "Validation successful: Records found."
+          else
+            echo "Validation failed: No records found."
+            echo "--- [validate] Shutting down proxy ---"
+            pkill -f cloud-sql-proxy || echo "Proxy already stopped."
             exit 1
           fi
-
-          echo "--- [validate] Querying database via proxy ---"
-          RESULT=$(psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT COUNT(*) FROM connections;")
-          COUNT=$(echo $RESULT | xargs)
-
-          echo "Found $COUNT records."
           echo "--- [validate] Shutting down proxy ---"
           pkill -f cloud-sql-proxy || echo "Proxy already stopped."
-
-          if (( COUNT > 0 )); then echo "Validation successful."; exit 0;
-          else echo "Validation failed."; exit 1; fi
 
 substitutions:
   _SQL_REGION: 'asia-south1'
