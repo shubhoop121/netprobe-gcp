@@ -76,7 +76,9 @@ def insert_batch(cursor, batch):
         INSERT INTO connections (
             ts, uid, source_ip, source_port, destination_ip, destination_port,
             proto, service, duration, orig_bytes, resp_bytes, conn_state
-        ) VALUES %s ON CONFLICT (uid) DO NOTHING;
+        ) VALUES (
+            to_timestamp(%s), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+        ) ON CONFLICT (uid) DO NOTHING;
     """
     try:
         psycopg2.extras.execute_values(cursor, sql, batch)

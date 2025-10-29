@@ -113,7 +113,7 @@ jobs:
         run: terraform init
 
       - name: "Wait for NVA startup scripts"
-        run: sleep 120
+        run: sleep 180
 
       - name: "Get Terraform Outputs"
         id: tf-outputs
@@ -136,8 +136,6 @@ jobs:
 
       - name: "Trigger Cloud Build for Validation"
         run: |
-          # Pass the connection name from Terraform output as a substitution
-          CONN_NAME="${{ steps.tf-outputs.outputs.db_connection_name }}"
           gcloud builds submit --config=cloudbuild-validate.yaml --project=netprobe-473119 --region=asia-south1 --quiet
 
       - name: "Cleanup Test VM"
