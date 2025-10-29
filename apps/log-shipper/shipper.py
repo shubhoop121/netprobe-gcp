@@ -6,9 +6,7 @@ import psycopg2.extras
 import sys
 import argparse
 
-# --- Configuration ---
-# Credentials and host are read from environment variables for security
-DB_HOST = os.environ.get('DB_HOST', 'db') # Defaults to 'db' for local Docker
+DB_HOST = os.environ.get('DB_HOST', 'db')
 DB_NAME = os.environ.get('DB_NAME', 'netprobe_logs')
 DB_USER = os.environ.get('DB_USER', 'netprobe_user')
 DB_PASSWORD = os.environ.get('DB_PASSWORD')
@@ -16,7 +14,7 @@ DB_PASSWORD = os.environ.get('DB_PASSWORD')
 # Constants
 LOG_FILE_PATH_DEFAULT = "/opt/zeek/logs/current/conn.log"
 BATCH_SIZE = 100
-FLUSH_INTERVAL = 5 # seconds
+FLUSH_INTERVAL = 5
 
 def get_db_connection():
     """Establishes a connection to the PostgreSQL database with retries."""
@@ -68,25 +66,32 @@ def parse_zeek_conn_log(line):
         return None
 
 def insert_batch(cursor, batch):
-    """Inserts a batch of records using psycopg2.extras.execute_values for high efficiency."""
+    """Inserts a batch of records using psycopg2.extras.execute_values with a template."""
     if not batch:
         return
-        
+
     sql = """
         INSERT INTO connections (
             ts, uid, source_ip, source_port, destination_ip, destination_port,
             proto, service, duration, orig_bytes, resp_bytes, conn_state
-        ) VALUES (
-            to_timestamp(%s), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-        ) ON CONFLICT (uid) DO NOTHING;
+        ) VALUES %s ON CONFLICT (uid) DO NOTHING;
     """
+    template = '(to_timestamp(%s), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'
+
     try:
-        psycopg2.extras.execute_values(cursor, sql, batch)
-        print(f"[{time.ctime()}] Successfully inserted batch of {len(batch)} records.")
+        psycopg2.extras.execute_values(
+            cursor,
+            sql,
+            batch,
+            template=template,
+            page_size=BATCH_SIZE
+        )
+        cursor.connection.commit()
+        print(f"[{time.ctime()}] Successfully inserted/skipped batch of {len(batch)} records.")
+
     except Exception as e:
         print(f"[{time.ctime()}] Database batch insert failed: {e}", file=sys.stderr)
-        # In a real production system, you might handle failed batches (e.g., write to a dead-letter file)
-        pass
+        cursor.connection.rollback()
 
 def main(log_file_path):
     """Main function to tail the log and ship data to the database."""
