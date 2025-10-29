@@ -12,25 +12,33 @@ steps:
     id: 'validate_records'
     entrypoint: 'bash'
     args:
-      - '-c'
-      - |
-        set -e
-        echo "--- Starting Cloud SQL Proxy for ${_DB_CONNECTION_NAME} ---"
-        ./cloud-sql-proxy --private-ip "${_DB_CONNECTION_NAME}" &
-        PROXY_PID=$!
-        sleep 5
+        - '-c'
+        - |
+          set -e
+          DB_CONNECTION_NAME="${_DB_CONNECTION_NAME}"
 
-        echo "Waiting for proxy (PID $PROXY_PID)..."
-        if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 5; then echo "Proxy timed out."; kill $PROXY_PID 2>/dev/null || true; exit 1; fi
+          echo "--- Starting Cloud SQL Proxy for $DB_CONNECTION_NAME ---"
+          ./cloud-sql-proxy --private-ip "$DB_CONNECTION_NAME" &
+          sleep 5 # Give it time to start
 
-        echo "--- Querying database ---"
-        RESULT=$(psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT COUNT(*) FROM connections;")
-        COUNT=$(echo $RESULT | xargs)
+          echo "Waiting for proxy..."
+          if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 15; then
+             echo "Proxy did not become ready quickly."
+             pkill -f cloud-sql-proxy || true
+             exit 1
+          fi
 
-        echo "Found $COUNT records."
-        kill $PROXY_PID
-        if (( COUNT > 0 )); then echo "Validation successful."; exit 0;
-        else echo "Validation failed."; exit 1; fi
+          echo "--- Querying database ---"
+          RESULT=$(psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT COUNT(*) FROM connections;")
+          COUNT=$(echo $RESULT | xargs)
+
+          echo "Found $COUNT records."
+          # Kill the proxy process by name
+          echo "--- Shutting down proxy ---"
+          pkill -f cloud-sql-proxy || echo "Proxy already stopped."
+
+          if (( COUNT > 0 )); then echo "Validation successful."; exit 0;
+          else echo "Validation failed."; exit 1; fi
     secretEnv: ['PGPASSWORD']
 
 # Define substitutions (Defaults, _DB_CONNECTION_NAME will be passed by trigger)

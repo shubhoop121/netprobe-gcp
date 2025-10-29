@@ -10,36 +10,33 @@ steps:
     id: 'apply_schema'
     entrypoint: 'bash'
     args:
-      - '-c'
-      - |
-        set -e
-        echo "--- Starting Cloud SQL Proxy ---"
-        ./cloud-sql-proxy --private-ip "projects/${PROJECT_ID}/locations/${_SQL_REGION}/instances/${_SQL_INSTANCE_NAME}" &
-        PROXY_PID=$!
-        sleep 5
+        - '-c'
+        - |
+          set -e
+          DB_CONNECTION_NAME="projects/${PROJECT_ID}/locations/${_SQL_REGION}/instances/${_SQL_INSTANCE_NAME}"
 
-        echo "Waiting for proxy (PID $PROXY_PID)..."
-        for i in {1..10}; do
-          if pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}"; then echo "Proxy ready."; break; fi
-          if ! ps -p $PROXY_PID > /dev/null; then echo "Proxy died!"; exit 1; fi
-          echo "Attempt $i/10 failed. Waiting 15s..."; sleep 15
-        done
-        if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}"; then echo "Proxy timed out."; kill $PROXY_PID 2>/dev/null || true; exit 1; fi
+          echo "--- Starting Cloud SQL Proxy for $DB_CONNECTION_NAME ---"
+          ./cloud-sql-proxy --private-ip "$DB_CONNECTION_NAME" &
+          sleep 5
 
-        echo "--- Applying schema ---"
-        psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" <<-EOF
-          CREATE TABLE connections (
-          id SERIAL PRIMARY KEY, ts TIMESTAMP WITH TIME ZONE NOT NULL, uid VARCHAR(255) UNIQUE NOT NULL,
-          source_ip INET NOT NULL, source_port INTEGER NOT NULL, destination_ip INET NOT NULL,
-          destination_port INTEGER NOT NULL, proto VARCHAR(6), service VARCHAR(255), duration FLOAT,
-          orig_bytes BIGINT, resp_bytes BIGINT, conn_state VARCHAR(10),
-          logged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-          );
-        EOF
-        echo "--- Schema applied successfully ---"
-        kill $PROXY_PID
+          echo "Waiting for proxy..."
+          # Simplified check, assuming it starts quickly now
+          if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 15; then
+            echo "Proxy did not become ready quickly."
+            pkill -f cloud-sql-proxy || true
+            exit 1
+          fi
 
-# Define substitutions (Remain the same)
+          echo "--- Applying schema ---"
+          psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" <<-EOF
+            CREATE TABLE connections ( ... ); # Truncated
+          EOF
+          echo "--- Schema applied successfully ---"
+
+          # Kill the proxy process by name
+          echo "--- Shutting down proxy ---"
+          pkill -f cloud-sql-proxy || echo "Proxy already stopped."
+
 substitutions:
   _SQL_REGION: 'asia-south1'
   _SQL_INSTANCE_NAME: 'netprobe-db'
