@@ -15,19 +15,15 @@ steps:
       - '-c'
       - |
         set -e
-        # Use the connection name PASSED IN from the GitHub trigger
-        DB_CONNECTION_NAME="${_DB_CONNECTION_NAME}" # Use the substitution
-
-        echo "--- Starting Cloud SQL Proxy for $DB_CONNECTION_NAME ---"
-        ./cloud-sql-proxy --private-ip "$DB_CONNECTION_NAME" &
+        echo "--- Starting Cloud SQL Proxy for ${_DB_CONNECTION_NAME} ---"
+        ./cloud-sql-proxy --private-ip "${_DB_CONNECTION_NAME}" &
         PROXY_PID=$!
         sleep 5
 
-        echo "Waiting for proxy (PID $PROXY_PID) to accept connections on localhost..."
-        # Use default substitutions for user/dbname
+        echo "Waiting for proxy (PID $PROXY_PID)..."
         if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 5; then echo "Proxy timed out."; kill $PROXY_PID 2>/dev/null || true; exit 1; fi
 
-        echo "--- Querying database via proxy ---"
+        echo "--- Querying database ---"
         RESULT=$(psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT COUNT(*) FROM connections;")
         COUNT=$(echo $RESULT | xargs)
 
