@@ -8,54 +8,41 @@ steps:
   # Step 2: Start Proxy & Validate Records
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'validate_records'
-    secretEnv: ['PGPASSWORD'] # Make password available
+    secretEnv: ['PGPASSWORD']
     entrypoint: 'bash'
     args:
-      - '-c'
-      - |
-        set -e
-        DB_CONNECTION_NAME="${_DB_CONNECTION_NAME}" # Use substitution passed from trigger
+        - '-c'
+        - |
+          set -e
+          echo "Using provided PGPASSWORD (masked): [$$PGPASSWORD]"
+          echo "--- [validate] Starting Cloud SQL Proxy for ${_DB_CONNECTION_NAME} ---"
+          ./cloud-sql-proxy --private-ip "${_DB_CONNECTION_NAME}" &
+          sleep 5
 
-        echo "Using provided PGPASSWORD (masked): [$$PGPASSWORD]"
+          echo "Waiting for proxy..."
+          if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 15; then
+            echo "Proxy did not become ready quickly."
+            pkill -f cloud-sql-proxy || true
+            exit 1
+          fi
 
-        echo "--- [validate] Starting Cloud SQL Proxy for $DB_CONNECTION_NAME ---"
-        # Run proxy in background WITHOUT capturing PID
-        ./cloud-sql-proxy --private-ip "$DB_CONNECTION_NAME" &
-        sleep 5 # Allow time for proxy to start listening locally
+          echo "--- [validate] Querying database via proxy ---"
+          RESULT=$(psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT COUNT(*) FROM connections;")
+          COUNT=$(echo $RESULT | xargs)
 
-        echo "Waiting for proxy..."
-        # Use pg_isready check
-        if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 15; then
-          echo "Proxy did not become ready quickly."
-          pkill -f cloud-sql-proxy || true
-          exit 1
-        fi
+          echo "Found $COUNT records."
+          echo "--- [validate] Shutting down proxy ---"
+          pkill -f cloud-sql-proxy || echo "Proxy already stopped."
 
-        echo "--- [validate] Querying database via proxy ---"
-        RESULT=$(psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT COUNT(*) FROM connections;")
-        COUNT=$(echo $RESULT | xargs) # Clean whitespace
+          if (( COUNT > 0 )); then echo "Validation successful."; exit 0;
+          else echo "Validation failed."; exit 1; fi
 
-        echo "Found $COUNT records."
-        echo "--- [validate] Shutting down proxy ---"
-        # Kill proxy by name
-        pkill -f cloud-sql-proxy || echo "Proxy already stopped."
-
-        # Check if records were found and exit accordingly
-        if (( COUNT > 0 )); then
-          echo "Validation successful: Records found."
-          exit 0
-        else
-          echo "Validation failed: No records found."
-          exit 1
-        fi
-
-# (Substitutions, availableSecrets, timeout, options: pool: ... remain the same)
 substitutions:
   _SQL_REGION: 'asia-south1'
   _SQL_INSTANCE_NAME: 'netprobe-db'
   _SQL_USER: 'netprobe_user'
   _SQL_DBNAME: 'netprobe_logs'
-  _DB_CONNECTION_NAME: '' # Placeholder required for value passed by trigger
+  _DB_CONNECTION_NAME: ''
 
 availableSecrets:
   secretManager:
