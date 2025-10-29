@@ -15,7 +15,7 @@ steps:
       - |
         set -e
         # Use the connection name PASSED IN from the GitHub trigger via substitution _DB_CONNECTION_NAME
-        echo "Using provided PGPASSWORD (masked): [$PGPASSWORD]"
+        echo "Using provided PGPASSWORD (masked): [$$PGPASSWORD]"
 
         echo "--- [validate] Starting Cloud SQL Proxy for ${_DB_CONNECTION_NAME} ---"
         # Run proxy WITHOUT --private-ip, using only the connection name passed in
