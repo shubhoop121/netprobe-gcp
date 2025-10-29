@@ -78,7 +78,12 @@ jobs:
         
       - name: "Trigger Cloud Build for Schema Creation"
         working-directory: ./infra/terraform
-        run: 'gcloud builds submit --config=../../cloudbuild-schema.yaml --project=netprobe-473119 --quiet'
+        run: |
+          gcloud builds submit \
+            --config=../../cloudbuild-schema.yaml \
+            --project=netprobe-473119 \
+            --substitutions=PROJECT_ID=netprobe-473119 \
+            --quiet
 
 # ======================================================================================
 # JOB 3: VALIDATE DEPLOYMENT
