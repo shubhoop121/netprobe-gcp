@@ -139,8 +139,7 @@ jobs:
         run: |
           # Pass the connection name from Terraform output as a substitution
           CONN_NAME="${{ steps.tf-outputs.outputs.db_connection_name }}"
-          gcloud builds submit --config=cloudbuild-validate.yaml --project=netprobe-473119 --region=asia-south1 --quiet \
-            --substitutions=_DB_CONNECTION_NAME="$CONN_NAME"
+          gcloud builds submit --config=cloudbuild-validate.yaml --project=netprobe-473119 --region=asia-south1 --quiet
 
       - name: "Cleanup Test VM"
         if: always()
