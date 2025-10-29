@@ -14,30 +14,44 @@ steps:
         - '-c'
         - |
           set -e
-          if [ -z "$$PGPASSWORD" ]; then
-            echo "ERROR: PGPASSWORD is empty!"
-            exit 1
-          else
-            echo "SUCCESS: PGPASSWORD is set (length: $${#PGPASSWORD})"
-          fi
+          echo "--- Installing PostgreSQL client and Cloud SQL Proxy ---"
+          apt-get update && apt-get install -y postgresql-client curl
+          curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          
+          echo "Using provided PGPASSWORD (masked): [$$PGPASSWORD]"
           echo "--- Starting Cloud SQL Proxy ---"
-          # Construct connection name DIRECTLY in the command using substitutions
-          ./cloud-sql-proxy --private-ip "projects/${PROJECT_ID}/locations/${_SQL_REGION}/instances/${_SQL_INSTANCE_NAME}" &
-          sleep 5 # Give proxy time to start (no PID capture needed)
+          ./cloud-sql-proxy --private-ip "${PROJECT_ID}:${_SQL_REGION}:${_SQL_INSTANCE_NAME}" &
+          sleep 5
 
           echo "Waiting for proxy..."
           if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 15; then
             echo "Proxy did not become ready quickly."
-            pkill -f cloud-sql-proxy || true # Kill by name
+            pkill -f cloud-sql-proxy || true
             exit 1
           fi
-
+          
           echo "--- Applying schema ---"
           psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" <<-EOF
-            CREATE TABLE connections ( id SERIAL PRIMARY KEY, ts TIMESTAMP WITH TIME ZONE NOT NULL, uid VARCHAR(255) UNIQUE NOT NULL, source_ip INET NOT NULL, source_port INTEGER NOT NULL, destination_ip INET NOT NULL, destination_port INTEGER NOT NULL, proto VARCHAR(6), service VARCHAR(255), duration FLOAT, orig_bytes BIGINT, resp_bytes BIGINT, conn_state VARCHAR(10), logged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() );
+            CREATE TABLE IF NOT EXISTS connections (
+              id SERIAL PRIMARY KEY,
+              ts TIMESTAMP WITH TIME ZONE NOT NULL,
+              uid VARCHAR(255) UNIQUE NOT NULL,
+              source_ip INET NOT NULL,
+              source_port INTEGER NOT NULL,
+              destination_ip INET NOT NULL,
+              destination_port INTEGER NOT NULL,
+              proto VARCHAR(6),
+              service VARCHAR(255),
+              duration FLOAT,
+              orig_bytes BIGINT,
+              resp_bytes BIGINT,
+              conn_state VARCHAR(10),
+              logged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
           EOF
+          
           echo "--- Schema applied successfully ---"
-
           echo "--- Shutting down proxy ---"
           pkill -f cloud-sql-proxy || echo "Proxy already stopped."
 
