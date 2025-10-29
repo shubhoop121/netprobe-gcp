@@ -25,6 +25,7 @@ steps:
           sleep 5
 
           echo "Waiting for proxy..."
+          apt-get update && apt-get install -y postgresql-client
           if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 15; then
             echo "Proxy did not become ready quickly."
             pkill -f cloud-sql-proxy || true

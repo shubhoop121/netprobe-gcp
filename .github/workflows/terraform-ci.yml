@@ -124,7 +124,7 @@ jobs:
           echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
           echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
 
-      - name: "Set up Cloud SDK" # Needed for gcloud commands
+      - name: "Set up Cloud SDK"
         uses: 'google-github-actions/setup-gcloud@v2'
 
       - name: "Run Live Traffic Test via gcloud"

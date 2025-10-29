@@ -20,6 +20,7 @@ steps:
           sleep 5
 
           echo "Waiting for proxy..."
+          apt-get update && apt-get install -y postgresql-client
           if psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT 1 FROM connections LIMIT 1;" | grep -q 1; then
             echo "Validation successful: Records found."
           else
