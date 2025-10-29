@@ -36,7 +36,6 @@ substitutions:
   _SQL_INSTANCE_NAME: 'netprobe-db'
   _SQL_USER: 'netprobe_user'
   _SQL_DBNAME: 'netprobe_logs'
-  _DB_CONNECTION_NAME: ''
 
 availableSecrets:
   secretManager:
