@@ -3,49 +3,68 @@ steps:
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'setup_tools'
     entrypoint: 'bash'
-    args: ['-c', 'set -e; echo "--- Installing tools ---"; apt-get update && apt-get install -y postgresql-client curl; curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64; chmod +x cloud-sql-proxy; ./cloud-sql-proxy --version']
+    args: ['-c', 'set -e; echo "--- [validate] Installing tools ---"; apt-get update && apt-get install -y postgresql-client curl; curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64; chmod +x cloud-sql-proxy; ./cloud-sql-proxy --version']
 
   # Step 2: Start Proxy & Validate Records
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'validate_records'
+    secretEnv: ['PGPASSWORD']
     entrypoint: 'bash'
     args:
-        - '-c'
-        - |
-          set -e
-          echo "Using provided PGPASSWORD (masked): [$PGPASSWORD]"
-          echo "--- Starting Cloud SQL Proxy for ${_DB_CONNECTION_NAME} ---"
-          # Use the _DB_CONNECTION_NAME substitution DIRECTLY in the command
-          ./cloud-sql-proxy --private-ip "${_DB_CONNECTION_NAME}" &
-          sleep 5 # Give proxy time to start (no PID capture needed)
+      - '-c'
+      - |
+        set -e
+        # Use the connection name PASSED IN from the GitHub trigger via substitution _DB_CONNECTION_NAME
+        echo "Using provided PGPASSWORD (masked): [$PGPASSWORD]"
 
-          echo "Waiting for proxy..."
-          if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 15; then
-             echo "Proxy did not become ready quickly."
-             pkill -f cloud-sql-proxy || true # Kill by name
-             exit 1
-          fi
+        echo "--- [validate] Starting Cloud SQL Proxy for ${_DB_CONNECTION_NAME} ---"
+        # Run proxy WITHOUT --private-ip, using only the connection name passed in
+        ./cloud-sql-proxy "${_DB_CONNECTION_NAME}" &
+        PROXY_PID=$!
+        sleep 5 # Allow time for proxy to start listening locally
 
-          echo "--- Querying database ---"
-          RESULT=$(psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT COUNT(*) FROM connections;")
-          COUNT=$(echo $RESULT | xargs)
+        echo "Waiting for proxy (PID $PROXY_PID)..."
+        # Use default substitutions for user/dbname in pg_isready check
+        if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 15; then
+          echo "Proxy did not become ready quickly."
+          pkill -f cloud-sql-proxy || true
+          exit 1
+        fi
 
-          echo "Found $COUNT records."
-          echo "--- Shutting down proxy ---"
-          pkill -f cloud-sql-proxy || echo "Proxy already stopped."
+        echo "--- [validate] Querying database via proxy ---"
+        RESULT=$(psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT COUNT(*) FROM connections;")
+        COUNT=$(echo $RESULT | xargs)
 
-          if (( COUNT > 0 )); then echo "Validation successful."; exit 0;
-          else echo "Validation failed."; exit 1; fi
+        echo "Found $COUNT records."
+        echo "--- [validate] Shutting down proxy ---"
+        pkill -f cloud-sql-proxy || echo "Proxy already stopped." # Kill by name
 
+        if (( COUNT > 0 )); then
+          echo "Validation successful: Records found."
+          exit 0
+        else
+          echo "Validation failed: No records found."
+          exit 1
+        fi
+
+# Define substitutions (Defaults, _DB_CONNECTION_NAME will be passed by trigger)
 substitutions:
   _SQL_REGION: 'asia-south1'
   _SQL_INSTANCE_NAME: 'netprobe-db'
   _SQL_USER: 'netprobe_user'
   _SQL_DBNAME: 'netprobe_logs'
-  _DB_CONNECTION_NAME: ''
+  _DB_CONNECTION_NAME: '' # Placeholder required for value passed by trigger
+
+# Make the password secret available
 availableSecrets:
   secretManager:
   - versionName: projects/${PROJECT_ID}/secrets/db-password/versions/latest
     env: 'PGPASSWORD'
 
+# Timeout
 timeout: '300s'
+
+# Ensure it runs in the private pool
+options:
+  pool:
+    name: 'projects/${PROJECT_ID}/locations/asia-south1/workerPools/netprobe-private-pool'

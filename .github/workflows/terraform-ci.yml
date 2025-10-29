@@ -85,37 +85,37 @@ jobs:
             --region=asia-south1 \
             --quiet
 
-# ======================================================================================
-# JOB 3: VALIDATE DEPLOYMENT
-# ======================================================================================
+  # ======================================================================================
+  # JOB 3: VALIDATE DEPLOYMENT (Final Version)
+  # ======================================================================================
   validate:
     name: "Validate Deployment"
-    needs: apply 
+    needs: apply # Runs only after 'apply' job succeeds
     runs-on: ubuntu-latest
     permissions:
-      contents: "read" 
+      contents: "read" # Required to checkout the code
       id-token: "write"
 
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
-      
+
       - name: "Authenticate to Google Cloud"
         uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-      
-      - name: "Set up Terraform"
+
+      - name: "Set up Terraform" # Needed for outputs and destroy
         uses: hashicorp/setup-terraform@v3
-      
-      - name: "Terraform Init" 
+
+      - name: "Terraform Init"
         working-directory: ./infra/terraform
         run: terraform init
-      
+
       - name: "Wait for NVA startup scripts"
-        run: sleep 180
-      
+        run: sleep 300
+
       - name: "Get Terraform Outputs"
         id: tf-outputs
         working-directory: ./infra/terraform
@@ -123,10 +123,10 @@ jobs:
           echo "workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_OUTPUT
           echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
           echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
-      
-      - name: "Set up Cloud SDK"
+
+      - name: "Set up Cloud SDK" # Needed for gcloud commands
         uses: 'google-github-actions/setup-gcloud@v2'
-          
+
       - name: "Run Live Traffic Test via gcloud"
         run: |
           echo "--- Triggering traffic from workload VM: ${{ steps.tf-outputs.outputs.workload_vm_name }} ---"
@@ -137,11 +137,10 @@ jobs:
 
       - name: "Trigger Cloud Build for Validation"
         run: |
-          gcloud builds submit \
-            --config=./infra/terraform/cloudbuild-validate.yaml \
-            --project=netprobe-473119 \
-            --quiet \
-            --substitutions=_DB_CONNECTION_NAME="${{ steps.tf-outputs.outputs.db_connection_name }}"
+          # Pass the connection name from Terraform output as a substitution
+          CONN_NAME="${{ steps.tf-outputs.outputs.db_connection_name }}"
+          gcloud builds submit --config=cloudbuild-validate.yaml --project=netprobe-473119 --region=asia-south1 --quiet \
+            --substitutions=_DB_CONNECTION_NAME="$CONN_NAME"
 
       - name: "Cleanup Test VM"
         if: always()
@@ -149,7 +148,7 @@ jobs:
         env:
           TF_VAR_db_password: "dummy-password-for-cleanup"
         run: |
-          terraform init 
+          terraform init
           terraform destroy -auto-approve \
             -target=google_compute_instance.test_workload[0] \
             -var="app_version=cleanup-${{ github.run_id }}" \
