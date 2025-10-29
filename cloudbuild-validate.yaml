@@ -1,69 +1,54 @@
+# cloudbuild-validate.yaml (Final Version)
+
 steps:
-  # Step 1: Install tools
+  # Step 1: Install psql client & Download Proxy
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'setup_tools'
     entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        set -e
-        echo "--- [setup] Installing psql & Cloud SQL Proxy ---"
-        apt-get update && apt-get install -y postgresql-client curl
-        curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64
-        chmod +x cloud-sql-proxy
-        ./cloud-sql-proxy --version
+    args: ['-c', 'set -e; echo "--- Installing tools ---"; apt-get update && apt-get install -y postgresql-client curl; curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64; chmod +x cloud-sql-proxy; ./cloud-sql-proxy --version']
 
-  # Step 2: Validate database content
+  # Step 2: Start Proxy & Validate Records
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'validate_records'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        set -euo pipefail
+        set -e
+        # Use the connection name PASSED IN from the GitHub trigger
+        DB_CONNECTION_NAME="${_DB_CONNECTION_NAME}" # Use the substitution
 
-        echo "--- [validate] Reading DB connection name ---"
-        DB_CONNECTION_NAME=$(cat ./infra/terraform/db_conn_name.txt)
-        echo "Using connection: $DB_CONNECTION_NAME"
-
-        echo "--- [validate] Starting Cloud SQL Proxy ---"
+        echo "--- Starting Cloud SQL Proxy for $DB_CONNECTION_NAME ---"
         ./cloud-sql-proxy --private-ip "$DB_CONNECTION_NAME" &
         PROXY_PID=$!
         sleep 5
 
-        echo "--- [validate] Checking proxy readiness ---"
-        if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 5; then
-          echo "Proxy not ready. Exiting."
-          kill $PROXY_PID 2>/dev/null || true
-          exit 1
-        fi
+        echo "Waiting for proxy (PID $PROXY_PID) to accept connections on localhost..."
+        # Use default substitutions for user/dbname
+        if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 5; then echo "Proxy timed out."; kill $PROXY_PID 2>/dev/null || true; exit 1; fi
 
-        echo "--- [validate] Running validation query ---"
-        COUNT=$(PGPASSWORD="$PGPASSWORD" psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT COUNT(*) FROM connections;" | xargs)
-        echo "Found $COUNT records in connections table."
+        echo "--- Querying database via proxy ---"
+        RESULT=$(psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT COUNT(*) FROM connections;")
+        COUNT=$(echo $RESULT | xargs)
 
+        echo "Found $COUNT records."
         kill $PROXY_PID
-        if (( COUNT > 0 )); then
-          echo "--- [validate] ✅ Validation successful ---"
-          exit 0
-        else
-          echo "--- [validate] ❌ No records found ---"
-          exit 1
-        fi
-
+        if (( COUNT > 0 )); then echo "Validation successful."; exit 0;
+        else echo "Validation failed."; exit 1; fi
     secretEnv: ['PGPASSWORD']
 
-# Cloud Build substitutions
+# Define substitutions (Defaults, _DB_CONNECTION_NAME will be passed by trigger)
 substitutions:
   _SQL_REGION: 'asia-south1'
   _SQL_INSTANCE_NAME: 'netprobe-db'
   _SQL_USER: 'netprobe_user'
   _SQL_DBNAME: 'netprobe_logs'
+  _DB_CONNECTION_NAME: '' # Must be defined, even if empty, to be passed by trigger
 
-# Secrets
+# Make the password secret available
 availableSecrets:
   secretManager:
-    - versionName: projects/${PROJECT_ID}/secrets/db-password/versions/latest
-      env: 'PGPASSWORD'
+  - versionName: projects/${PROJECT_ID}/secrets/db-password/versions/latest
+    env: 'PGPASSWORD'
 
 timeout: '300s'

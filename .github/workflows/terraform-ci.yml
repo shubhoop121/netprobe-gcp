@@ -2,142 +2,119 @@ name: "Terraform CI/CD"
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
-
-permissions:
-  contents: read
-  id-token: write
+    branches:
+      - main
 
 jobs:
   # ======================================================================================
-  # JOB 1: TERRAFORM PLAN (Pull Request Only)
+  # JOB 1: TERRAFORM PLAN
   # ======================================================================================
   plan:
     name: "Terraform Plan on PR"
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
 
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
-
       - name: "Authenticate to Google Cloud"
-        uses: google-github-actions/auth@v2
+        uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
       - name: "Set up Terraform"
         uses: hashicorp/setup-terraform@v3
-
       - name: "Terraform Init"
         working-directory: ./infra/terraform
         run: terraform init
-
       - name: "Terraform Plan"
         working-directory: ./infra/terraform
         env:
           TF_VAR_db_password: "dummy-password-for-plan"
-        run: |
-          terraform plan -input=false \
-            -var="nva_instance_count=1" \
-            -var="branch_name=${{ github.head_ref }}" \
-            -var="app_version=${{ github.event.pull_request.head.sha }}" \
-            -var-file="terraform.tfvars"
-
+        run: terraform plan -input=false -var="nva_instance_count=1" -var="branch_name=${{ github.head_ref }}" -var="app_version=${{ github.event.pull_request.head.sha }}" -var-file="terraform.tfvars"
+  
   # ======================================================================================
-  # JOB 2: TERRAFORM APPLY + SCHEMA CREATION (Main branch only)
+  # JOB 2: TERRAFORM APPLY
   # ======================================================================================
   apply:
     name: "Terraform Apply to Main"
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
 
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
-
       - name: "Authenticate to Google Cloud"
-        uses: google-github-actions/auth@v2
+        uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
       - name: "Set up Terraform"
         uses: hashicorp/setup-terraform@v3
-
       - name: "Terraform Init"
         working-directory: ./infra/terraform
         run: terraform init
-
       - name: "Terraform Apply"
         working-directory: ./infra/terraform
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-        run: |
-          terraform apply -auto-approve \
-            -var="nva_instance_count=1" \
-            -var="branch_name=main" \
-            -var="app_version=${{ github.sha }}" \
-            -var-file="terraform.tfvars"
-
-      - name: "Write DB Connection Name to File"
-        id: write_conn_name
-        working-directory: ./infra/terraform
-        run: terraform output -raw db_connection_name > ./db_conn_name.txt
-
-      - name: "Set up gcloud CLI"
-        uses: google-github-actions/setup-gcloud@v2
+        run: terraform apply -auto-approve -var="nva_instance_count=2" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
+      
+      - name: "Set up Cloud SDK" # Needed for gcloud builds submit
+        uses: 'google-github-actions/setup-gcloud@v2'
 
       - name: "Trigger Cloud Build for Schema Creation"
-        run: |
-          echo "--- Triggering Cloud Build for Schema ---"
-          gcloud builds submit --config=cloudbuild-schema.yaml --project=netprobe-473119 --quiet
+        run: 'gcloud builds submit --config=cloudbuild-schema.yaml --project=netprobe-473119 --quiet'
 
   # ======================================================================================
-  # JOB 3: VALIDATION (Depends on successful Apply)
+  # JOB 3: VALIDATE DEPLOYMENT
   # ======================================================================================
   validate:
     name: "Validate Deployment"
-    needs: apply
+    needs: apply 
     runs-on: ubuntu-latest
+    permissions:
+      contents: "read" 
+      id-token: "write"
 
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
-
       - name: "Authenticate to Google Cloud"
-        uses: google-github-actions/auth@v2
+        uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-      - name: "Set up Terraform"
+      - name: "Set up Terraform" # Needed for outputs and destroy
         uses: hashicorp/setup-terraform@v3
-
-      - name: "Terraform Init"
+      - name: "Terraform Init" 
         working-directory: ./infra/terraform
         run: terraform init
-
       - name: "Wait for NVA startup scripts"
-        run: sleep 60
-
+        run: sleep 300
       - name: "Get Terraform Outputs"
         id: tf-outputs
         working-directory: ./infra/terraform
         run: |
           echo "workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_OUTPUT
           echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
-          terraform output -raw db_connection_name > ./db_conn_name.txt
+          # We pass db_connection_name directly to the Cloud Build step now
 
-      - name: "Set up Cloud SDK"
-        uses: google-github-actions/setup-gcloud@v2
-
+      - name: "Set up Cloud SDK" # Needed for gcloud compute ssh and builds submit
+        uses: 'google-github-actions/setup-gcloud@v2'
+        
       - name: "Run Live Traffic Test via gcloud"
         run: |
-          echo "--- Triggering test from workload VM ---"
+          echo "--- Triggering traffic from workload VM: ${{ steps.tf-outputs.outputs.workload_vm_name }} ---"
           gcloud compute ssh ${{ steps.tf-outputs.outputs.workload_vm_name }} \
             --zone=${{ steps.tf-outputs.outputs.workload_vm_zone }} \
             --tunnel-through-iap \
@@ -145,8 +122,10 @@ jobs:
 
       - name: "Trigger Cloud Build for Validation"
         run: |
-          echo "--- Triggering Cloud Build for Validation ---"
-          gcloud builds submit --config=cloudbuild-validate.yaml --project=netprobe-473119 --quiet
+          # Pass the connection name from Terraform output as a substitution
+          CONN_NAME=$(cd ./infra/terraform && terraform output -raw db_connection_name)
+          gcloud builds submit --config=cloudbuild-validate.yaml --project=netprobe-473119 --quiet \
+            --substitutions=_DB_CONNECTION_NAME="$CONN_NAME"
 
       - name: "Cleanup Test VM"
         if: always()
@@ -154,7 +133,7 @@ jobs:
         env:
           TF_VAR_db_password: "dummy-password-for-cleanup"
         run: |
-          terraform init
+          terraform init 
           terraform destroy -auto-approve \
             -target=google_compute_instance.test_workload[0] \
             -var="app_version=cleanup-${{ github.run_id }}" \
