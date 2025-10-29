@@ -1,5 +1,5 @@
 steps:
-  # Step 1: Install psql client & Download Proxy
+  # Step 1: Install tools (No changes)
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'setup_tools'
     entrypoint: 'bash'
@@ -8,23 +8,23 @@ steps:
   # Step 2: Start Proxy & Validate Records
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'validate_records'
-    secretEnv: ['PGPASSWORD']
+    secretEnv: ['PGPASSWORD'] # Make password available
     entrypoint: 'bash'
     args:
       - '-c'
       - |
         set -e
-        # Use the connection name PASSED IN from the GitHub trigger via substitution _DB_CONNECTION_NAME
+        DB_CONNECTION_NAME="${_DB_CONNECTION_NAME}" # Use substitution passed from trigger
+
         echo "Using provided PGPASSWORD (masked): [$$PGPASSWORD]"
 
-        echo "--- [validate] Starting Cloud SQL Proxy for ${_DB_CONNECTION_NAME} ---"
-        # Run proxy WITHOUT --private-ip, using only the connection name passed in
-        ./cloud-sql-proxy "${_DB_CONNECTION_NAME}" &
-        PROXY_PID=$!
+        echo "--- [validate] Starting Cloud SQL Proxy for $DB_CONNECTION_NAME ---"
+        # Run proxy in background WITHOUT capturing PID
+        ./cloud-sql-proxy --private-ip "$DB_CONNECTION_NAME" &
         sleep 5 # Allow time for proxy to start listening locally
 
-        echo "Waiting for proxy (PID $PROXY_PID)..."
-        # Use default substitutions for user/dbname in pg_isready check
+        echo "Waiting for proxy..."
+        # Use pg_isready check
         if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}" -t 15; then
           echo "Proxy did not become ready quickly."
           pkill -f cloud-sql-proxy || true
@@ -33,12 +33,14 @@ steps:
 
         echo "--- [validate] Querying database via proxy ---"
         RESULT=$(psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT COUNT(*) FROM connections;")
-        COUNT=$(echo $RESULT | xargs)
+        COUNT=$(echo $RESULT | xargs) # Clean whitespace
 
         echo "Found $COUNT records."
         echo "--- [validate] Shutting down proxy ---"
-        pkill -f cloud-sql-proxy || echo "Proxy already stopped." # Kill by name
+        # Kill proxy by name
+        pkill -f cloud-sql-proxy || echo "Proxy already stopped."
 
+        # Check if records were found and exit accordingly
         if (( COUNT > 0 )); then
           echo "Validation successful: Records found."
           exit 0
@@ -47,7 +49,7 @@ steps:
           exit 1
         fi
 
-# Define substitutions (Defaults, _DB_CONNECTION_NAME will be passed by trigger)
+# (Substitutions, availableSecrets, timeout, options: pool: ... remain the same)
 substitutions:
   _SQL_REGION: 'asia-south1'
   _SQL_INSTANCE_NAME: 'netprobe-db'
@@ -55,16 +57,13 @@ substitutions:
   _SQL_DBNAME: 'netprobe_logs'
   _DB_CONNECTION_NAME: '' # Placeholder required for value passed by trigger
 
-# Make the password secret available
 availableSecrets:
   secretManager:
   - versionName: projects/${PROJECT_ID}/secrets/db-password/versions/latest
     env: 'PGPASSWORD'
 
-# Timeout
 timeout: '300s'
 
-# Ensure it runs in the private pool
 options:
   pool:
     name: 'projects/${PROJECT_ID}/locations/asia-south1/workerPools/netprobe-private-pool'

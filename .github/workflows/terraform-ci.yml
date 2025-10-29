@@ -114,7 +114,7 @@ jobs:
         run: terraform init
 
       - name: "Wait for NVA startup scripts"
-        run: sleep 300
+        run: sleep 120
 
       - name: "Get Terraform Outputs"
         id: tf-outputs
