@@ -1,11 +1,10 @@
 steps:
-  # Step 1: Install tools
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'setup_tools'
     entrypoint: 'bash'
     args: ['-c', 'set -e; apt-get update && apt-get install -y postgresql-client curl; curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64; chmod +x cloud-sql-proxy']
 
-  # Step 2: Start Proxy & Apply Schema
+  # Start Proxy & Apply Schema
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'apply_schema'
     secretEnv: ['PGPASSWORD']

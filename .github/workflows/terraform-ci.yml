@@ -1,5 +1,4 @@
 name: "Terraform CI/CD"
-
 on:
   push:
     branches:
@@ -106,7 +105,7 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: "Set up Terraform" # Needed for outputs and destroy
+      - name: "Set up Terraform"
         uses: hashicorp/setup-terraform@v3
 
       - name: "Terraform Init"

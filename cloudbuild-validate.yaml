@@ -1,11 +1,10 @@
 steps:
-  # Step 1: Install tools (No changes)
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'setup_tools'
     entrypoint: 'bash'
     args: ['-c', 'set -e; echo "--- [validate] Installing tools ---"; apt-get update && apt-get install -y postgresql-client curl; curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64; chmod +x cloud-sql-proxy; ./cloud-sql-proxy --version']
 
-  # Step 2: Start Proxy & Validate Records
+  # Start Proxy & Validate Records
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'validate_records'
     secretEnv: ['PGPASSWORD']
