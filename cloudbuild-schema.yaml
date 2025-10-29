@@ -1,5 +1,7 @@
+# cloudbuild-schema.yaml (Final Version)
+
 steps:
-  # Step 1: Install tools
+  # Step 1: Install psql client & Download Proxy
   - name: 'gcr.io/cloud-builders/gcloud'
     id: 'setup_tools'
     entrypoint: 'bash'
@@ -7,11 +9,11 @@ steps:
       - '-c'
       - |
         set -e
-        echo "--- [setup] Installing psql & Cloud SQL Proxy ---"
+        echo "--- Installing psql & Downloading Proxy ---"
         apt-get update && apt-get install -y postgresql-client curl
         curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64
         chmod +x cloud-sql-proxy
-        ./cloud-sql-proxy --version
+        ./cloud-sql-proxy --version # Verify
 
   # Step 2: Start Proxy & Apply Schema
   - name: 'gcr.io/cloud-builders/gcloud'
@@ -20,57 +22,49 @@ steps:
     args:
       - '-c'
       - |
-        set -euo pipefail
+        set -e
+        # Use the connection name directly (default substitutions are available)
+        DB_CONNECTION_NAME="projects/${PROJECT_ID}/locations/${_SQL_REGION}/instances/${_SQL_INSTANCE_NAME}"
 
-        echo "--- [schema] Reading DB connection name ---"
-        DB_CONNECTION_NAME=$(cat ./infra/terraform/db_conn_name.txt)
-        echo "Using connection: $DB_CONNECTION_NAME"
-
-        echo "--- [schema] Starting Cloud SQL Proxy ---"
+        echo "--- Starting Cloud SQL Proxy for $DB_CONNECTION_NAME ---"
+        # Use the downloaded proxy with the required flag
         ./cloud-sql-proxy --private-ip "$DB_CONNECTION_NAME" &
         PROXY_PID=$!
         sleep 5
 
-        echo "--- [schema] Waiting for proxy to accept connections ---"
+        echo "Waiting for proxy (PID $PROXY_PID) to accept connections on localhost..."
         for i in {1..10}; do
-          if pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}"; then
-            echo "Proxy is ready."
-            break
-          fi
-          if ! ps -p $PROXY_PID > /dev/null; then
-            echo "Proxy process died unexpectedly."
-            exit 1
-          fi
-          echo "Attempt $i/10 failed, waiting..."
-          sleep 10
+          if pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}"; then echo "Proxy ready."; break; fi
+          if ! ps -p $PROXY_PID > /dev/null; then echo "Proxy died!"; exit 1; fi
+          echo "Attempt $i/10 failed. Waiting 15s..."; sleep 15
         done
+        if ! pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}"; then echo "Proxy timed out."; kill $PROXY_PID 2>/dev/null || true; exit 1; fi
 
-        echo "--- [schema] Applying database schema ---"
-        PGPASSWORD="$PGPASSWORD" psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" <<'EOF'
-          CREATE TABLE IF NOT EXISTS connections (
-            id SERIAL PRIMARY KEY,
-            src_ip VARCHAR(50),
-            dest_ip VARCHAR(50),
-            timestamp TIMESTAMP DEFAULT NOW()
+        echo "--- Applying schema via proxy ---"
+        psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" <<-EOF
+          CREATE TABLE connections (
+              id SERIAL PRIMARY KEY, ts TIMESTAMP WITH TIME ZONE NOT NULL, uid VARCHAR(255) UNIQUE NOT NULL,
+              source_ip INET NOT NULL, source_port INTEGER NOT NULL, destination_ip INET NOT NULL,
+              destination_port INTEGER NOT NULL, proto VARCHAR(6), service VARCHAR(255), duration FLOAT,
+              orig_bytes BIGINT, resp_bytes BIGINT, conn_state VARCHAR(10),
+              logged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
           );
         EOF
-
-        echo "--- [schema] Schema applied successfully ---"
+        echo "--- Schema applied successfully ---"
         kill $PROXY_PID
-
     secretEnv: ['PGPASSWORD']
 
-# Cloud Build substitutions
+# Define substitutions (Used directly in the script)
 substitutions:
   _SQL_REGION: 'asia-south1'
   _SQL_INSTANCE_NAME: 'netprobe-db'
   _SQL_USER: 'netprobe_user'
   _SQL_DBNAME: 'netprobe_logs'
 
-# Secrets
+# Make the password secret available
 availableSecrets:
   secretManager:
-    - versionName: projects/${PROJECT_ID}/secrets/db-password/versions/latest
-      env: 'PGPASSWORD'
+  - versionName: projects/${PROJECT_ID}/secrets/db-password/versions/latest
+    env: 'PGPASSWORD'
 
 timeout: '600s'
