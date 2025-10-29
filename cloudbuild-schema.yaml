@@ -13,6 +13,7 @@ steps:
         - '-c'
         - |
           set -e
+          echo "Using provided PGPASSWORD (masked): [$PGPASSWORD]"
           echo "--- Starting Cloud SQL Proxy ---"
           # Construct connection name DIRECTLY in the command using substitutions
           ./cloud-sql-proxy --private-ip "projects/${PROJECT_ID}/locations/${_SQL_REGION}/instances/${_SQL_INSTANCE_NAME}" &
