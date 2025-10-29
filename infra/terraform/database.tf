@@ -13,7 +13,7 @@ resource "google_compute_global_address" "private_service_access" {
 resource "google_service_networking_connection" "private_vpc_connection" {
   network                 = google_compute_network.main.id
   service                 = "servicenetworking.googleapis.com"
-  reserved_peering_ranges = [google_compute_global_address.private_service_access.name]
+  reserved_peering_ranges = [google_compute_global_address.private_service_access.name, google_compute_global_address.cb_private_pool_range.name]
 }
 
 # --- Cloud SQL PostgreSQL Instance (Cost-Optimized) ---
@@ -49,7 +49,8 @@ resource "google_sql_database_instance" "netprobe_db" {
   depends_on = [
     google_service_networking_connection.private_vpc_connection,
     google_project_service.sqladmin,
-    google_project_service.service_networking
+    google_project_service.service_networking,
+    google_project_service.servicenetworking_for_cb
   ]
 }
 
