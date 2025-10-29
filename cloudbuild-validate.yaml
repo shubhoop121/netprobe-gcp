@@ -15,8 +15,8 @@ steps:
         - |
           set -e
           echo "Using provided PGPASSWORD (masked): [$$PGPASSWORD]"
-          echo "--- [validate] Starting Cloud SQL Proxy for ${_DB_CONNECTION_NAME} ---"
-          ./cloud-sql-proxy --private-ip "${_DB_CONNECTION_NAME}" &
+          echo "--- [validate] Starting Cloud SQL Proxy ---"
+          ./cloud-sql-proxy --private-ip "${PROJECT_ID}:${_SQL_REGION}:${_SQL_INSTANCE_NAME}" &
           sleep 5
 
           echo "Waiting for proxy..."
