@@ -67,3 +67,8 @@ availableSecrets:
     env: 'PGPASSWORD'
 
 timeout: '600s'
+
+options:
+  pool:
+    # Use Terraform output or construct the name dynamically if preferred
+    name: 'projects/${PROJECT_ID}/locations/asia-south1/workerPools/netprobe-private-pool'
