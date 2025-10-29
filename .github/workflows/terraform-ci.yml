@@ -82,6 +82,7 @@ jobs:
           gcloud builds submit \
             --config=../../cloudbuild-schema.yaml \
             --project=netprobe-473119 \
+            --region=asia-south1 \
             --quiet
 
 # ======================================================================================
