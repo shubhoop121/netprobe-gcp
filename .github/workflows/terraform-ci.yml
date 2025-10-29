@@ -82,7 +82,6 @@ jobs:
           gcloud builds submit \
             --config=../../cloudbuild-schema.yaml \
             --project=netprobe-473119 \
-            --substitutions=PROJECT_ID=netprobe-473119 \
             --quiet
 
 # ======================================================================================
