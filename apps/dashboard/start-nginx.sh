@@ -10,5 +10,5 @@ sed -i "s|__PORT__|$PORT|g" /etc/nginx/conf.d/default.conf
 sed -i "s|__API_SERVICE_URL__|$API_URL|g" /etc/nginx/conf.d/default.conf
 
 echo "Starting Nginx on port $PORT..."
-echo "Proxying /api/ to $API_URL/"
+echo "Proxying /api/ to $API_URL"
 nginx -g 'daemon off;'
