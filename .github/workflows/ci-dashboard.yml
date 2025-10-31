@@ -3,11 +3,15 @@ name: "CI/CD - Dashboard Service"
 on:
   push:
     branches: [ main ]
-    paths: [ 'apps/dashboard/**' ]
+    paths: 
+    - [ 'apps/dashboard/**' ]
+    - '.github/workflows/ci-dashboard.yml'
+
   pull_request:
     branches: [ main ]
-    paths: [ 'apps/dashboard/**' ]
-
+    paths: 
+    - [ 'apps/dashboard/**' ]
+    - '.github/workflows/ci-dashboard.yml'
 env:
   PROJECT_ID: "netprobe-473119"
   REGION: "asia-south1"
