@@ -1,0 +1,30 @@
+version: '3.8'
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    command: sleep infinity
+    
+    volumes:
+      - ..:/workspaces/netprobe-gcp:cached
+      
+    depends_on:
+      - db
+
+  # This is our local, throw-away database for development
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: netprobe_user
+      POSTGRES_PASSWORD: testpassword
+      POSTGRES_DB: netprobe_logs_local
+    volumes:
+      - netprobe_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  netprobe_postgres_data:

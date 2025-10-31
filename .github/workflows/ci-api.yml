@@ -1,0 +1,69 @@
+name: "CI/CD - API Service"
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'apps/api/**' ]
+  pull_request:
+    branches: [ main ]
+    paths: [ 'apps/api/**' ]
+
+env:
+  PROJECT_ID: "netprobe-473119"
+  REGION: "asia-south1"
+  REPO_ID: "netprobe-docker-repo"
+  SERVICE_NAME: "netprobe-api"
+
+jobs:
+  build_and_test_pr:
+    if: github.event_name == 'pull_request'
+    name: "Build and Test PR (API)"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: "google-github-actions/setup-gcloud@v2"
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+      - name: "Build Docker Image"
+        run: docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} ./apps/api
+      # Add unit tests here
+
+  # This job deploys the API to production when merged to main
+  deploy_to_production:
+    if: false
+    name: "Build and Deploy to Production (API)"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: "google-github-actions/setup-gcloud@v2"
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+      - name: "Build and Push Docker Image"
+        run: |
+          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} ./apps/api
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+      - name: "Fetch Live Database IP"
+        id: get_db_ip
+        run: |
+          LIVE_DB_IP=$(gcloud secrets versions access latest --secret="db-private-ip-live" --project=${{ env.PROJECT_ID }})
+          echo "DB_HOST=$LIVE_DB_IP" >> $GITHUB_ENV
+      - name: "Deploy to Cloud Run (Production)"
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --vpc-connector="netprobe-vpc-connector" \
+            --set-env-vars="DB_HOST=${{ env.DB_HOST }}" \
+            --allow-unauthenticated

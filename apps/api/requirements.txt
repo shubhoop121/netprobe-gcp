@@ -1,5 +1,6 @@
-# /apps/api/requirements.txt
 Flask
 psycopg2-binary
 python-dotenv
 SQLAlchemy
+google-cloud-secret-manager
+gunicorn

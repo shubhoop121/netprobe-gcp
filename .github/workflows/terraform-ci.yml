@@ -67,6 +67,7 @@ jobs:
         run: terraform init
       
       - name: "Terraform Apply"
+        id: tf-apply
         working-directory: ./infra/terraform
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
@@ -84,6 +85,17 @@ jobs:
             --region=asia-south1 \
             --quiet
 
+      - name: "Get Dynamic Database IP"
+        id: get_db_ip
+        working-directory: ./infra/terraform
+        run: echo "db_ip=$(terraform output -raw netprobe_db_private_ip)" >> $GITHUB_OUTPUT
+
+      - name: "Update Live DB IP in Secret Manager"
+        run: |
+          echo "Updating db-private-ip-live with new IP: ${{ steps.get_db_ip.outputs.db_ip }}"
+          echo "${{ steps.get_db_ip.outputs.db_ip }}" | gcloud secrets versions add db-private-ip-live --data-file=-
+          echo "Successfully updated live database IP."
+          
   # ======================================================================================
   # JOB 3: VALIDATE DEPLOYMENT (Final Version)
   # ======================================================================================
