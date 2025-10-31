@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths: 
-    - [ 'apps/dashboard/**' ]
+    - 'apps/dashboard/**'
     - '.github/workflows/ci-dashboard.yml'
 
   pull_request:
