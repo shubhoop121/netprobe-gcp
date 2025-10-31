@@ -36,7 +36,7 @@ jobs:
 
   # This job deploys the API to production when merged to main
   deploy_to_production:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: false
     name: "Build and Deploy to Production (API)"
     runs-on: ubuntu-latest
     permissions:
