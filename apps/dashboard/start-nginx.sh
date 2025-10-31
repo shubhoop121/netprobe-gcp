@@ -1,12 +1,14 @@
 #!/bin/sh
-# This script is run when the container starts
+set -e
 
-# Read the PORT environment variable provided by Cloud Run, default to 8080
+# Read env vars provided by Cloud Run
 PORT="${PORT:-8080}"
+API_URL="${API_SERVICE_URL:-http://api-not-set.com}"
 
-# Find the placeholder __PORT__ in the config file and replace it with the actual port
-sed -i "s/__PORT__/$PORT/g" /etc/nginx/conf.d/default.conf
+# Replace the placeholders in the config file
+sed -i "s|__PORT__|$PORT|g" /etc/nginx/conf.d/default.conf
+sed -i "s|__API_SERVICE_URL__|$API_URL|g" /etc/nginx/conf.d/default.conf
 
-# Start Nginx in the foreground (which is required by Cloud Run)
 echo "Starting Nginx on port $PORT..."
+echo "Proxying /api/ to $API_URL/"
 nginx -g 'daemon off;'

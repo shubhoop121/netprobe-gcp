@@ -140,10 +140,15 @@ jobs:
 
       - name: "Run Live Traffic Test via gcloud"
         run: |
+          echo "--- Generating SSH keys non-interactively ---"
+          # This ensures keys exist without any prompts
+          ssh-keygen -t rsa -N '' -f ~/.ssh/google_compute_engine -q
+
           echo "--- Triggering traffic from workload VM: ${{ steps.tf-outputs.outputs.workload_vm_name }} ---"
           gcloud compute ssh ${{ steps.tf-outputs.outputs.workload_vm_name }} \
             --zone=${{ steps.tf-outputs.outputs.workload_vm_zone }} \
             --tunnel-through-iap \
+            --quiet \
             --command="curl -v https://google.com"
 
       - name: "Trigger Cloud Build for Validation"
