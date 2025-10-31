@@ -9,13 +9,11 @@ output "db_connection_name" {
 }
 
 output "test_workload_vm_name" {
-  description = "The name of the test workload VM (only created when nva_instance_count > 0)."
-  # This condition prevents the error when no VM is created.
-  value       = var.nva_instance_count > 0 ? google_compute_instance.test_workload[0].name : "not_created"
+  description = "The name of the test workload VM."
+  value       = length(google_compute_instance.test_workload) > 0 ? google_compute_instance.test_workload[0].name : "not_created"
 }
 
 output "test_workload_vm_zone" {
-  description = "The zone of the test workload VM (only created when nva_instance_count > 0)."
-  # This condition prevents the error when no VM is created.
-  value       = var.nva_instance_count > 0 ? google_compute_instance.test_workload[0].zone : "not_created"
+  description = "The zone of the test workload VM."
+  value       = length(google_compute_instance.test_workload) > 0 ? google_compute_instance.test_workload[0].zone : "not_created"
 }

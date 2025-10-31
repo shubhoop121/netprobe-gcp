@@ -79,10 +79,19 @@ jobs:
         run: |
           docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} ./apps/dashboard
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+
+      - name: "Fetch Live API URL"
+        id: get_api_url
+        run: |
+          API_URL=$(gcloud run services describe netprobe-api --region=${{ env.REGION }} --format="value(status.url)")
+          echo "API_URL=$API_URL" >> $GITHUB_ENV
+
       - name: "Deploy to Cloud Run (Production)"
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
             --region=${{ env.REGION }} \
-            --allow-unauthenticated
+            --allow-unauthenticated \
+            --set-env-vars="API_SERVICE_URL=${{ env.API_URL }}" # Inject the URL here
+          
           gcloud run services update-traffic ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --to-latest
