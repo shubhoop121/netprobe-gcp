@@ -34,28 +34,28 @@ jobs:
       - name: "Build and Push Docker Image"
         run: |
           docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} ./apps/dashboard
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
-      - name: "Deploy to Cloud Run (Preview)"
-        id: deploy_preview
-        run: |
-          PR_TAG="pr-${{ github.event.number }}"
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
-            --region=${{ env.REGION }} \
-            --tag=$PR_TAG \
-            --no-traffic
-          PREVIEW_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format="value(trafficStatuses[?@.tag=='$PR_TAG'].uri)")
-          echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_OUTPUT
-      - name: "Comment on PR with Preview URL"
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `Frontend preview for this PR is live at: ${{ steps.deploy_preview.outputs.PREVIEW_URL }}`
-            })
+      #    docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+      # - name: "Deploy to Cloud Run (Preview)"
+      #   id: deploy_preview
+      #   run: |
+      #     PR_TAG="pr-${{ github.event.number }}"
+      #     gcloud run deploy ${{ env.SERVICE_NAME }} \
+      #       --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+      #       --region=${{ env.REGION }} \
+      #       --tag=$PR_TAG \
+      #       --no-traffic
+      #     PREVIEW_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format="value(trafficStatuses[?@.tag=='$PR_TAG'].uri)")
+      #     echo "PREVIEW_URL=$PREVIEW_URL" >> $GITHUB_OUTPUT
+      # - name: "Comment on PR with Preview URL"
+      #   uses: actions/github-script@v6
+      #   with:
+      #     script: |
+      #       github.rest.issues.createComment({
+      #         issue_number: context.issue.number,
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         body: `Frontend preview for this PR is live at: ${{ steps.deploy_preview.outputs.PREVIEW_URL }}`
+      #       })
 
   # This job deploys the Dashboard to production when merged to main
   deploy_to_production:
