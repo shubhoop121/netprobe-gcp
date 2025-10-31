@@ -6,7 +6,6 @@ import sqlalchemy
 app = Flask(__name__)
 
 # --- Configuration ---
-# Get configuration from environment variables
 DB_USER = os.environ.get("DB_USER", "netprobe_user")
 PROJECT_ID = os.environ.get("PROJECT_ID", "netprobe-473119")
 DB_NAME = os.environ.get("DB_NAME", "netprobe_logs")

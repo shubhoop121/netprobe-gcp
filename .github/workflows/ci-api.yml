@@ -3,10 +3,11 @@ name: "CI/CD - API Service"
 on:
   push:
     branches: [ main ]
-    paths: [ 'apps/api/**' ]
+    paths:
+    - 'apps/api/**'
+    - '.github/workflows/ci-api.yml'
   pull_request:
     branches: [ main ]
-    paths: [ 'apps/api/**' ]
 
 env:
   PROJECT_ID: "netprobe-473119"
