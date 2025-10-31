@@ -1,5 +1,4 @@
 #!/bin/sh
-# Add -x to print every command that runs
 set -ex
 
 # Read env vars provided by Cloud Run
