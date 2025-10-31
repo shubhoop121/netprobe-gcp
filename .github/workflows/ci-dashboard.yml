@@ -9,9 +9,7 @@ on:
 
   pull_request:
     branches: [ main ]
-    paths: 
-    - [ 'apps/dashboard/**' ]
-    - '.github/workflows/ci-dashboard.yml'
+
 env:
   PROJECT_ID: "netprobe-473119"
   REGION: "asia-south1"

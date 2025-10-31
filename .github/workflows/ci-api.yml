@@ -8,9 +8,6 @@ on:
     - '.github/workflows/ci-api.yml'
   pull_request:
     branches: [ main ]
-    paths: 
-    - [ 'apps/api/**' ]
-    - '.github/workflows/ci-api.yml'
 
 env:
   PROJECT_ID: "netprobe-473119"
