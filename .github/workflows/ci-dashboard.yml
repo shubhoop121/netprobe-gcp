@@ -16,7 +16,7 @@ env:
 
 jobs:
   deploy_preview:
-    if: false
+    if: github.event_name == 'pull_request'
     name: "Build and Deploy Preview (Dashboard)"
     runs-on: ubuntu-latest
     permissions:
@@ -59,7 +59,7 @@ jobs:
 
   # This job deploys the Dashboard to production when merged to main
   deploy_to_production:
-    if: false
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     name: "Build and Deploy to Production (Dashboard)"
     runs-on: ubuntu-latest
     permissions:
