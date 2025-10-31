@@ -10,11 +10,6 @@ resource "google_project_iam_member" "compute_sa_secret_accessor" {
   member  = "serviceAccount:${data.google_compute_default_service_account.default.email}"
 }
 
-# Find the Compute Engine default service account
-data "google_compute_default_service_account" "default" {
-  project = var.project_id
-}
-
 # Grant the Compute Engine default SA (used by our API) the Cloud SQL Client role
 resource "google_project_iam_member" "api_runtime_sa_sql_client" {
   project = var.project_id
