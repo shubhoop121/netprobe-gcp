@@ -1,0 +1,208 @@
+name: "NetProbe Main CI/CD Pipeline"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PROJECT_ID: "netprobe-473119"
+  REGION: "asia-south1"
+  REPO_ID: "netprobe-docker-repo"
+  API_SERVICE_NAME: "netprobe-api"
+  DASHBOARD_SERVICE_NAME: "netprobe-dashboard"
+
+jobs:
+  # ======================================================================================
+  # JOB 1: RUNS ON PULL REQUESTS
+  # ======================================================================================
+  plan_and_build_pr:
+    name: "PR Check: Plan Infra & Build Apps"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
+
+    steps:
+      - name: "Checkout code"
+        uses: actions/checkout@v4
+      - name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      
+      # 1. Test Terraform Plan
+      - name: "Set up Terraform"
+        uses: hashicorp/setup-terraform@v3
+      - name: "Terraform Init (PR)"
+        working-directory: ./infra/terraform
+        run: terraform init
+      - name: "Terraform Plan (PR)"
+        working-directory: ./infra/terraform
+        env:
+          TF_VAR_db_password: "dummy-password-for-plan"
+        run: terraform plan -input=false -var="nva_instance_count=1" -var="branch_name=${{ github.head_ref }}" -var="app_version=${{ github.event.pull_request.head.sha }}" -var-file="terraform.tfvars"
+
+      # 2. Test Application Builds
+      - name: "Set up Cloud SDK"
+        uses: "google-github-actions/setup-gcloud@v2"
+      - name: "Configure Docker"
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+      - name: "Build API Image (PR)"
+        run: docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }} ./apps/api
+      - name: "Build Dashboard Image (PR)"
+        run: docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} ./apps/dashboard
+
+  # ======================================================================================
+  # JOB 2: DEPLOY INFRASTRUCTURE (Runs on Merge to main)
+  # ======================================================================================
+  apply-infra:
+    name: "Deploy Infrastructure"
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
+    outputs:
+      api_url: ${{ steps.tf-outputs.outputs.api_service_url }}
+      db_private_ip: ${{ steps.tf-outputs.outputs.netprobe_db_private_ip }}
+      workload_vm_name: ${{ steps.tf-outputs.outputs.test_workload_vm_name }}
+      workload_vm_zone: ${{ steps.tf-outputs.outputs.test_workload_vm_zone }}
+      db_connection_name: ${{ steps.tf-outputs.outputs.db_connection_name }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: hashicorp/setup-terraform@v3
+      - name: "Terraform Init"
+        working-directory: ./infra/terraform
+        run: terraform init
+      - name: "Terraform Apply"
+        working-directory: ./infra/terraform
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+        run: terraform apply -auto-approve -var="nva_instance_count=1" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
+      
+      - name: "Set up Cloud SDK"
+        uses: 'google-github-actions/setup-gcloud@v2'
+      - name: "Trigger Cloud Build for Schema Creation"
+        run: 'gcloud builds submit --config=cloudbuild-schema.yaml --project=${{ env.PROJECT_ID }} --region=${{ env.REGION }} --quiet'
+
+      - name: "Get Terraform Outputs"
+        id: tf-outputs
+        working-directory: ./infra/terraform
+        run: |
+          echo "api_service_url=$(terraform output -raw api_service_url)" >> $GITHUB_OUTPUT
+          echo "netprobe_db_private_ip=$(terraform output -raw netprobe_db_private_ip)" >> $GITHUB_OUTPUT
+          echo "test_workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_OUTPUT
+          echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
+          echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
+          
+      - name: "Update Live DB IP in Secret Manager"
+        run: echo "${{ steps.tf-outputs.outputs.netprobe_db_private_ip }}" | gcloud secrets versions add db-private-ip-live --data-file=-
+
+  # ======================================================================================
+  # JOB 3: DEPLOY APPLICATIONS (Runs on Merge to main, after Infra)
+  # ======================================================================================
+  deploy-apps:
+    name: "Build and Deploy Applications"
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: apply-infra # <-- THIS SOLVES THE RACE CONDITION
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: "google-github-actions/setup-gcloud@v2"
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      - name: "Fetch Live Database IP"
+        id: get_db_ip
+        run: |
+          LIVE_DB_IP=$(gcloud secrets versions access latest --secret="db-private-ip-live" --project=${{ env.PROJECT_ID }})
+          echo "DB_HOST=$LIVE_DB_IP" >> $GITHUB_ENV
+          
+      - name: "Build & Deploy API"
+        run: |
+          docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }} ./apps/api
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }}
+          gcloud run deploy ${{ env.API_SERVICE_NAME }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --vpc-connector="netprobe-vpc-connector" \
+            --set-env-vars="DB_HOST=${{ env.DB_HOST }}" \
+            --allow-unauthenticated
+
+      - name: "Build & Deploy Dashboard"
+        run: |
+          docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} ./apps/dashboard
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }}
+          gcloud run deploy ${{ env.DASHBOARD_SERVICE_NAME }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --allow-unauthenticated \
+            --set-env-vars="API_SERVICE_URL=${{ needs.apply-infra.outputs.api_url }}"
+          gcloud run services update-traffic ${{ env.DASHBOARD_SERVICE_NAME }} --region=${{ env.REGION }} --to-latest
+
+  # ======================================================================================
+  # JOB 4: VALIDATE DEPLOYMENT (Runs on Merge to main, after Apps)
+  # ======================================================================================
+  validate:
+    name: "Validate Deployment"
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: deploy-apps
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read" 
+      id-token: "write"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: hashicorp/setup-terraform@v3
+      - name: "Terraform Init" 
+        working-directory: ./infra/terraform
+        run: terraform init
+      - name: "Wait for NVA startup scripts"
+        run: sleep 300
+      
+      - name: "Set up Cloud SDK"
+        uses: 'google-github-actions/setup-gcloud@v2'
+        
+      - name: "Run Live Traffic Test via gcloud"
+        run: |
+          echo "--- Triggering traffic from workload VM: ${{ needs.apply-infra.outputs.workload_vm_name }} ---"
+          gcloud compute ssh ${{ needs.apply-infra.outputs.workload_vm_name }} \
+            --zone=${{ needs.apply-infra.outputs.workload_vm_zone }} \
+            --tunnel-through-iap \
+            --command="curl -v https://google.com"
+
+      - name: "Trigger Cloud Build for Validation"
+        run: |
+          gcloud builds submit --config=cloudbuild-validate.yaml --project=${{ env.PROJECT_ID }} --region=${{ env.REGION }} --quiet \
+            --substitutions=_DB_CONNECTION_NAME="${{ needs.apply-infra.outputs.db_connection_name }}"
+
+      - name: "Cleanup Test VM"
+        if: always()
+        working-directory: ./infra/terraform
+        env:
+          TF_VAR_db_password: "dummy-password-for-cleanup"
+        run: |
+          terraform init 
+          terraform destroy -auto-approve \
+            -target=google_compute_instance.test_workload[0] \
+            -var="app_version=cleanup-${{ github.run_id }}" \
+            -var="branch_name=cleanup"

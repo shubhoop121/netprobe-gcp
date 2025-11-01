@@ -2,7 +2,7 @@ import os
 from flask import Flask, jsonify
 from google.cloud import secretmanager
 import sqlalchemy
-
+from flask import request
 app = Flask(__name__)
 
 # --- Configuration ---
@@ -110,7 +110,17 @@ def get_latest_connections():
     # 4. Return jsonify(data=...)
     return jsonify(message="Endpoint not implemented"), 501
 
+@app.route("/api/debug")
+def debug_request():
+    """
+    A debug endpoint to echo back the headers and path
+    that the API server received from the proxy.
+    """
+    return jsonify(
+        message="Request received by API",
+        path=request.path,
+        headers={key: value for (key, value) in request.headers.items()}
+    )
 # --- End of endpoints ---
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))

@@ -88,6 +88,16 @@ resource "google_cloud_run_v2_service_iam_member" "dashboard_public_access" {
   member   = "allUsers"
 }
 
+output "api_service_url" {
+  description = "The public URL of the netprobe-api service"
+  value       = google_cloud_run_v2_service.api.uri
+}
+
+output "dashboard_service_url" {
+  description = "The public URL of the netprobe-dashboard service"
+  value       = google_cloud_run_v2_service.dashboard.uri
+}
+
 # 7. Allow the dashboard (as a service) to call the API
 #    This is not needed yet as the dashboard will call the API's public URL
 #    We will re-implement this if we lock down the API's ingress.
