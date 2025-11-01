@@ -24,7 +24,6 @@ jobs:
     permissions:
       contents: "read"
       id-token: "write"
-
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
@@ -34,7 +33,6 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
       
-      # 1. Test Terraform Plan
       - name: "Set up Terraform"
         uses: hashicorp/setup-terraform@v3
       - name: "Terraform Init (PR)"
@@ -46,15 +44,13 @@ jobs:
           TF_VAR_db_password: "dummy-password-for-plan"
         run: terraform plan -input=false -var="nva_instance_count=1" -var="branch_name=${{ github.head_ref }}" -var="app_version=${{ github.event.pull_request.head.sha }}" -var-file="terraform.tfvars"
 
-      # 2. Test Application Builds
       - name: "Set up Cloud SDK"
         uses: "google-github-actions/setup-gcloud@v2"
-      - name: "Configure Docker"
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
-      - name: "Build API Image (PR)"
-        run: docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }} ./apps/api
-      - name: "Build Dashboard Image (PR)"
-        run: docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} ./apps/dashboard
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+      - name: "Build App Images (PR)"
+        run: |
+          docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }} ./apps/api
+          docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} ./apps/dashboard
 
   # ======================================================================================
   # JOB 2: DEPLOY INFRASTRUCTURE (Runs on Merge to main)
@@ -70,7 +66,6 @@ jobs:
       workload_vm_name: ${{ steps.tf-outputs.outputs.test_workload_vm_name }}
       workload_vm_zone: ${{ steps.tf-outputs.outputs.test_workload_vm_zone }}
       db_connection_name: ${{ steps.tf-outputs.outputs.db_connection_name }}
-
     steps:
       - uses: actions/checkout@v4
       - uses: "google-github-actions/auth@v2"
@@ -92,7 +87,7 @@ jobs:
       - name: "Trigger Cloud Build for Schema Creation"
         run: 'gcloud builds submit --config=cloudbuild-schema.yaml --project=${{ env.PROJECT_ID }} --region=${{ env.REGION }} --quiet'
 
-      - name: "Get Terraform Outputs"
+      - name: "Get Terraform Outputs for Validation Jobs"
         id: tf-outputs
         working-directory: ./infra/terraform
         run: |
@@ -101,15 +96,17 @@ jobs:
           echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
           
       - name: "Update Live DB IP in Secret Manager"
-        run: echo "${{ steps.tf-outputs.outputs.netprobe_db_private_ip }}" | gcloud secrets versions add db-private-ip-live --data-file=-
+        run: |
+          DB_IP=$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip)
+          echo "$DB_IP" | gcloud secrets versions add db-private-ip-live --data-file=-
 
   # ======================================================================================
-  # JOB 3: DEPLOY APPLICATIONS (Runs on Merge to main, after Infra)
+  # JOB 3: DEPLOY API (Runs on Merge to main, after Infra)
   # ======================================================================================
   deploy-api:
     name: "Build and Deploy API"
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: apply-infra
+    needs: apply-infra 
     runs-on: ubuntu-latest
     permissions:
       contents: "read"
@@ -118,10 +115,13 @@ jobs:
       api_url: ${{ steps.deploy_api.outputs.api_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: "google-github-actions/auth@v2"
+      
+      - name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
       - uses: "google-github-actions/setup-gcloud@v2"
       - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
@@ -133,15 +133,11 @@ jobs:
       - name: "Fetch Live Database IP"
         id: get_db_ip
         run: |
-          echo "--- Fetching live database IP from Secret Manager... ---"
           LIVE_DB_IP=$(gcloud secrets versions access latest --secret="db-private-ip-live" --project=${{ env.PROJECT_ID }})
           if [ -z "$LIVE_DB_IP" ]; then
             echo "!!! CRITICAL: Failed to fetch 'db-private-ip-live' from Secret Manager."
-            echo "Make sure the secret exists and the 'github-actions-sa' has the 'Secret Manager Secret Accessor' role."
             exit 1
           fi
-
-          echo "Successfully fetched DB_HOST: ${LIVE_DB_IP}"
           echo "DB_HOST=$LIVE_DB_IP" >> $GITHUB_ENV
           
       - name: "Deploy API to Cloud Run"
@@ -163,17 +159,20 @@ jobs:
   deploy-dashboard:
     name: "Build and Deploy Dashboard"
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: deploy-api
+    needs: deploy-api 
     runs-on: ubuntu-latest
     permissions:
       contents: "read"
       id-token: "write"
     steps:
       - uses: actions/checkout@v4
-      - uses: "google-github-actions/auth@v2"
+      
+      - name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          
       - uses: "google-github-actions/setup-gcloud@v2"
       - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
       - name: "Build and Push Dashboard Image"
@@ -183,9 +182,7 @@ jobs:
           
       - name: "Deploy Dashboard to Cloud Run"
         run: |
-          # Get the API URL from the previous job's output
           API_URL_WITH_SLASH="${{ needs.deploy-api.outputs.api_url }}"
-          # Strip the trailing slash
           API_URL=${API_URL_WITH_SLASH%/}
           
           gcloud run deploy ${{ env.DASHBOARD_SERVICE_NAME }} \
@@ -201,39 +198,56 @@ jobs:
   validate:
     name: "Validate Deployment"
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [apply-infra, deploy-dashboard]
+    needs: [apply-infra, deploy-dashboard] 
     runs-on: ubuntu-latest
     permissions:
       contents: "read" 
       id-token: "write"
     steps:
       - uses: actions/checkout@v4
-      - uses: "google-github-actions/auth@v2"
+      
+      - name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          
       - uses: hashicorp/setup-terraform@v3
       - name: "Terraform Init" 
         working-directory: ./infra/terraform
         run: terraform init
       - name: "Wait for NVA startup scripts"
-        run: sleep 180
+        run: sleep 300
       
       - name: "Set up Cloud SDK"
         uses: 'google-github-actions/setup-gcloud@v2'
         
+      - name: "Get Terraform Outputs"
+        id: tf-outputs
+        working-directory: ./infra/terraform
+        run: |
+          set -e
+          terraform init
+          echo "workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_OUTPUT
+          echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
+          echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
+        
       - name: "Run Live Traffic Test via gcloud"
         run: |
-          echo "--- Triggering traffic from workload VM: ${{ needs.apply-infra.outputs.workload_vm_name }} ---"
-          gcloud compute ssh ${{ needs.apply-infra.outputs.workload_vm_name }} \
-            --zone=${{ needs.apply-infra.outputs.workload_vm_zone }} \
+          echo "--- Generating SSH keys non-interactively ---"
+          ssh-keygen -t rsa -N '' -f ~/.ssh/google_compute_engine -q
+
+          echo "--- Triggering traffic from workload VM: ${{ steps.tf-outputs.outputs.workload_vm_name }} ---"
+          gcloud compute ssh ${{ steps.tf-outputs.outputs.workload_vm_name }} \
+            --zone=${{ steps.tf-outputs.outputs.workload_vm_zone }} \
             --tunnel-through-iap \
             --quiet \
             --command="curl -v https://google.com"
 
       - name: "Trigger Cloud Build for Validation"
         run: |
-          gcloud builds submit --config=cloudbuild-validate.yaml --project=netprobe-473119 --region=asia-south1 --quiet
+          gcloud builds submit --config=cloudbuild-validate.yaml --project=${{ env.PROJECT_ID }} --region=${{ env.REGION }} --quiet \
+            --substitutions=_DB_CONNECTION_NAME="${{ steps.tf-outputs.outputs.db_connection_name }}"
 
       - name: "Cleanup Test VM"
         if: always()
