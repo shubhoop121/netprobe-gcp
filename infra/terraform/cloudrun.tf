@@ -57,6 +57,7 @@ resource "google_cloud_run_v2_service" "api" {
       # This setting routes all outbound traffic through the VPC
       egress    = "PRIVATE_RANGES_ONLY" 
     }
+    service_account = data.google_compute_default_service_account.default.email
   }
 
   depends_on = [google_vpc_access_connector.main]
