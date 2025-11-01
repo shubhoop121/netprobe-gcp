@@ -220,7 +220,7 @@ jobs:
           gcloud compute ssh ${{ needs.apply-infra.outputs.workload_vm_name }} \
             --zone=${{ needs.apply-infra.outputs.workload_vm_zone }} \
             --tunnel-through-iap \
-            -- quiet \
+            --quiet \
             --command="curl -v https://google.com"
 
       - name: "Trigger Cloud Build for Validation"
