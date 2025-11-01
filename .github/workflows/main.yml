@@ -133,7 +133,15 @@ jobs:
       - name: "Fetch Live Database IP"
         id: get_db_ip
         run: |
+          echo "--- Fetching live database IP from Secret Manager... ---"
           LIVE_DB_IP=$(gcloud secrets versions access latest --secret="db-private-ip-live" --project=${{ env.PROJECT_ID }})
+          if [ -z "$LIVE_DB_IP" ]; then
+            echo "!!! CRITICAL: Failed to fetch 'db-private-ip-live' from Secret Manager."
+            echo "Make sure the secret exists and the 'github-actions-sa' has the 'Secret Manager Secret Accessor' role."
+            exit 1
+          fi
+
+          echo "Successfully fetched DB_HOST: ${LIVE_DB_IP}"
           echo "DB_HOST=$LIVE_DB_IP" >> $GITHUB_ENV
           
       - name: "Deploy API to Cloud Run"
