@@ -209,7 +209,7 @@ jobs:
         working-directory: ./infra/terraform
         run: terraform init
       - name: "Wait for NVA startup scripts"
-        run: sleep 300
+        run: sleep 180
       
       - name: "Set up Cloud SDK"
         uses: 'google-github-actions/setup-gcloud@v2'
@@ -220,12 +220,12 @@ jobs:
           gcloud compute ssh ${{ needs.apply-infra.outputs.workload_vm_name }} \
             --zone=${{ needs.apply-infra.outputs.workload_vm_zone }} \
             --tunnel-through-iap \
+            -- quiet \
             --command="curl -v https://google.com"
 
       - name: "Trigger Cloud Build for Validation"
         run: |
-          gcloud builds submit --config=cloudbuild-validate.yaml --project=${{ env.PROJECT_ID }} --region=${{ env.REGION }} --quiet \
-            --substitutions=_DB_CONNECTION_NAME="${{ needs.apply-infra.outputs.db_connection_name }}"
+          gcloud builds submit --config=cloudbuild-validate.yaml --project=netprobe-473119 --region=asia-south1 --quiet
 
       - name: "Cleanup Test VM"
         if: always()
