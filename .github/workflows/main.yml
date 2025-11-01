@@ -84,6 +84,15 @@ jobs:
       
       - name: "Set up Cloud SDK"
         uses: 'google-github-actions/setup-gcloud@v2'
+      
+      - name: "Wait for NVA Rolling Update to Complete"
+        run: |
+          echo "--- Waiting for NVA Managed Instance Group to become stable... ---"
+          gcloud compute instance-groups managed wait-until netprobe-nva-mig \
+            --region=${{ env.REGION }} \
+            --stable
+          echo "--- NVA cluster is stable. Proceeding. ---"
+      
       - name: "Trigger Cloud Build for Schema Creation"
         run: 'gcloud builds submit --config=cloudbuild-schema.yaml --project=${{ env.PROJECT_ID }} --region=${{ env.REGION }} --quiet'
 
@@ -192,9 +201,9 @@ jobs:
             --set-env-vars="API_SERVICE_URL=$API_URL"
           gcloud run services update-traffic ${{ env.DASHBOARD_SERVICE_NAME }} --region=${{ env.REGION }} --to-latest
 
-  # ======================================================================================
+  # =====================================================================================
   # JOB 5: VALIDATE DEPLOYMENT (Runs on Merge, after Apps are deployed)
-  # ======================================================================================
+  # =====================================================================================
   validate:
     name: "Validate Deployment"
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
