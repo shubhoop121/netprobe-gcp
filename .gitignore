@@ -1,6 +1,6 @@
 .terraform
 .terraform.lock.hcl
-tfplan
+*.tfplan
 cloud-sql-proxy
 .env
 node_modules
