@@ -55,7 +55,7 @@ resource "google_cloud_run_v2_service" "api" {
     vpc_access {
       connector = google_vpc_access_connector.main.id
       # This setting routes all outbound traffic through the VPC
-      egress    = "ALL_TRAFFIC" 
+      egress    = "PRIVATE_RANGES_ONLY" 
     }
   }
 

@@ -66,7 +66,12 @@ sudo python3 -m pip install psycopg2-binary
 
 DB_PASS=$(gcloud secrets versions access latest --secret="db-password" --project="${project_id}")
 GITHUB_PAT=$(gcloud secrets versions access latest --secret="github-pat" --project="${project_id}")
-DB_PRIVATE_IP="${db_private_ip}"
+DB_PRIVATE_IP=$(gcloud secrets versions access latest --secret="db-private-ip-live" --project="${project_id}")
+if [ -z "$DB_PRIVATE_IP" ]; then
+    echo "!!! CRITICAL: Failed to fetch 'db-private-ip-live' secret. Aborting."
+    exit 1
+fi
+echo "--- Successfully fetched live database IP: $DB_PRIVATE_IP ---"}"
 
 sudo git clone -b ${branch_name} https://oauth2:$${GITHUB_PAT}@github.com/shubhoop121/netprobe-gcp.git /opt/netprobe
 
