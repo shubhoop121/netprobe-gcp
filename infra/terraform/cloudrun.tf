@@ -74,6 +74,7 @@ resource "google_cloud_run_v2_service" "dashboard" {
     containers {
       image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
     }
+    service_account = data.google_compute_default_service_account.default.email
   }
 
   depends_on = [google_cloud_run_v2_service.api]
@@ -98,11 +99,3 @@ output "dashboard_service_url" {
   value       = google_cloud_run_v2_service.dashboard.uri
 }
 
-resource "google_cloud_run_v2_service_iam_member" "dashboard_to_api_invoker" {
-  project  = google_cloud_run_v2_service.api.project
-  location = google_cloud_run_v2_service.api.location
-  name     = google_cloud_run_v2_service.api.name
-  role     = "roles/run.invoker"
-
-  member   = "serviceAccount:${data.google_compute_default_service_account.default.email}"
-}
