@@ -41,9 +41,7 @@ resource "google_compute_instance_template" "nva" {
   metadata_startup_script = templatefile("${path.module}/nva-startup.sh.tftpl", {
     project_id    = var.project_id
     branch_name   = var.branch_name
-    db_private_ip = google_sql_database_instance.netprobe_db.private_ip_address
     terraform_db_pass = var.db_password
-
   })
 
   lifecycle {
