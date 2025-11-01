@@ -67,8 +67,6 @@ jobs:
       contents: "read"
       id-token: "write"
     outputs:
-      api_url: ${{ steps.tf-outputs.outputs.api_service_url }}
-      db_private_ip: ${{ steps.tf-outputs.outputs.netprobe_db_private_ip }}
       workload_vm_name: ${{ steps.tf-outputs.outputs.test_workload_vm_name }}
       workload_vm_zone: ${{ steps.tf-outputs.outputs.test_workload_vm_zone }}
       db_connection_name: ${{ steps.tf-outputs.outputs.db_connection_name }}
@@ -98,8 +96,6 @@ jobs:
         id: tf-outputs
         working-directory: ./infra/terraform
         run: |
-          echo "api_service_url=$(terraform output -raw api_service_url)" >> $GITHUB_OUTPUT
-          echo "netprobe_db_private_ip=$(terraform output -raw netprobe_db_private_ip)" >> $GITHUB_OUTPUT
           echo "test_workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_OUTPUT
           echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
           echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
@@ -110,10 +106,56 @@ jobs:
   # ======================================================================================
   # JOB 3: DEPLOY APPLICATIONS (Runs on Merge to main, after Infra)
   # ======================================================================================
-  deploy-apps:
-    name: "Build and Deploy Applications"
+  deploy-api:
+    name: "Build and Deploy API"
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: apply-infra # <-- THIS SOLVES THE RACE CONDITION
+    needs: apply-infra
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
+    outputs:
+      api_url: ${{ steps.deploy_api.outputs.api_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: "google-github-actions/setup-gcloud@v2"
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      - name: "Build and Push API Image"
+        run: |
+          docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }} ./apps/api
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }}
+          
+      - name: "Fetch Live Database IP"
+        id: get_db_ip
+        run: |
+          LIVE_DB_IP=$(gcloud secrets versions access latest --secret="db-private-ip-live" --project=${{ env.PROJECT_ID }})
+          echo "DB_HOST=$LIVE_DB_IP" >> $GITHUB_ENV
+          
+      - name: "Deploy API to Cloud Run"
+        id: deploy_api
+        run: |
+          gcloud run deploy ${{ env.API_SERVICE_NAME }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --vpc-connector="netprobe-vpc-connector" \
+            --set-env-vars="DB_HOST=${{ env.DB_HOST }}" \
+            --allow-unauthenticated
+          
+          API_URL=$(gcloud run services describe ${{ env.API_SERVICE_NAME }} --region=${{ env.REGION }} --format="value(status.url)")
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+
+  # ======================================================================================
+  # JOB 4: DEPLOY DASHBOARD (Runs on Merge, after API is deployed)
+  # ======================================================================================
+  deploy-dashboard:
+    name: "Build and Deploy Dashboard"
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: deploy-api
     runs-on: ubuntu-latest
     permissions:
       contents: "read"
@@ -126,42 +168,32 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
       - uses: "google-github-actions/setup-gcloud@v2"
       - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
-
-      - name: "Fetch Live Database IP"
-        id: get_db_ip
-        run: |
-          LIVE_DB_IP=$(gcloud secrets versions access latest --secret="db-private-ip-live" --project=${{ env.PROJECT_ID }})
-          echo "DB_HOST=$LIVE_DB_IP" >> $GITHUB_ENV
-          
-      - name: "Build & Deploy API"
-        run: |
-          docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }} ./apps/api
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }}
-          gcloud run deploy ${{ env.API_SERVICE_NAME }} \
-            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }} \
-            --region=${{ env.REGION }} \
-            --vpc-connector="netprobe-vpc-connector" \
-            --set-env-vars="DB_HOST=${{ env.DB_HOST }}" \
-            --allow-unauthenticated
-
-      - name: "Build & Deploy Dashboard"
+      - name: "Build and Push Dashboard Image"
         run: |
           docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} ./apps/dashboard
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }}
+          
+      - name: "Deploy Dashboard to Cloud Run"
+        run: |
+          # Get the API URL from the previous job's output
+          API_URL_WITH_SLASH="${{ needs.deploy-api.outputs.api_url }}"
+          # Strip the trailing slash
+          API_URL=${API_URL_WITH_SLASH%/}
+          
           gcloud run deploy ${{ env.DASHBOARD_SERVICE_NAME }} \
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} \
             --region=${{ env.REGION }} \
             --allow-unauthenticated \
-            --set-env-vars="API_SERVICE_URL=${{ needs.apply-infra.outputs.api_url }}"
+            --set-env-vars="API_SERVICE_URL=$API_URL"
           gcloud run services update-traffic ${{ env.DASHBOARD_SERVICE_NAME }} --region=${{ env.REGION }} --to-latest
 
   # ======================================================================================
-  # JOB 4: VALIDATE DEPLOYMENT (Runs on Merge to main, after Apps)
+  # JOB 5: VALIDATE DEPLOYMENT (Runs on Merge, after Apps are deployed)
   # ======================================================================================
   validate:
     name: "Validate Deployment"
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: deploy-apps
+    needs: [apply-infra, deploy-dashboard]
     runs-on: ubuntu-latest
     permissions:
       contents: "read" 
