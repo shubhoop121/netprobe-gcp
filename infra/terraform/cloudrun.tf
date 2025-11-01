@@ -98,15 +98,11 @@ output "dashboard_service_url" {
   value       = google_cloud_run_v2_service.dashboard.uri
 }
 
-# 7. Allow the dashboard (as a service) to call the API
-#    This is not needed yet as the dashboard will call the API's public URL
-#    We will re-implement this if we lock down the API's ingress.
-#    For now, this IAM binding is not necessary.
+resource "google_cloud_run_v2_service_iam_member" "dashboard_to_api_invoker" {
+  project  = google_cloud_run_v2_service.api.project
+  location = google_cloud_run_v2_service.api.location
+  name     = google_cloud_run_v2_service.api.name
+  role     = "roles/run.invoker"
 
-# resource "google_cloud_run_service_iam_member" "dashboard_to_api_invoker" {
-#   project  = google_cloud_run_v2_service.api.project
-#   location = google_cloud_run_v2_service.api.location
-#   name     = google_cloud_run_v2_service.api.name
-#   role     = "roles/run.invoker"
-#   member   = "serviceAccount:${google_cloud_run_v2_service.dashboard.template.0.service_account}"
-# }
+  member   = "serviceAccount:${data.google_compute_default_service_account.default.email}"
+}

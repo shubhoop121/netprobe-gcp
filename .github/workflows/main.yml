@@ -246,8 +246,7 @@ jobs:
 
       - name: "Trigger Cloud Build for Validation"
         run: |
-          gcloud builds submit --config=cloudbuild-validate.yaml --project=${{ env.PROJECT_ID }} --region=${{ env.REGION }} --quiet \
-            --substitutions=_DB_CONNECTION_NAME="${{ steps.tf-outputs.outputs.db_connection_name }}"
+          gcloud builds submit --config=cloudbuild-validate.yaml --project=${{ env.PROJECT_ID }} --region=${{ env.REGION }} --quiet
 
       - name: "Cleanup Test VM"
         if: always()

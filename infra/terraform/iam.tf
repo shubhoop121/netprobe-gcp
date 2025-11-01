@@ -25,3 +25,13 @@ resource "google_project_iam_member" "api_runtime_sa_secret_accessor" {
   role    = "roles/secretmanager.secretAccessor"
   member  = "serviceAccount:${data.google_compute_default_service_account.default.email}"
 }
+
+resource "google_cloud_run_v2_service_iam_member" "dashboard_to_api_invoker" {
+  project  = google_cloud_run_v2_service.api.project
+  location = google_cloud_run_v2_service.api.location
+  name     = google_cloud_run_v2_service.api.name
+  role     = "roles/run.invoker"
+
+  # The member is the identity of the DASHBOARD service
+  member   = "serviceAccount:${data.google_compute_default_service_account.default.email}"
+}
