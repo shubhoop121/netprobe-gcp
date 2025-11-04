@@ -43,7 +43,7 @@ resource "google_cloud_run_v2_service" "api" {
   project  = var.project_id
   location = var.region
   
-  ingress = "INGRESS_TRAFFIC_INTERNAL_AND_CLOUD_LOAD_BALANCING"
+  ingress = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   template {
     containers {
       image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
