@@ -163,7 +163,7 @@ jobs:
           echo "api_url=$API_URL" >> $GITHUB_OUTPUT
 
   # ======================================================================================
-  # JOB 4: DEPLOY DASHBOARD (Runs on Merge, after API is deployed)
+  # JOB 4: DEPLOY DASHBOARD (Runs on Merge, after API deployment)
   # ======================================================================================
   deploy-dashboard:
     name: "Build and Deploy Dashboard"
