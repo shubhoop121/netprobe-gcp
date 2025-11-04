@@ -1,14 +1,17 @@
 #!/bin/sh
+# -e: exit on error
+# -x: print every command
 set -ex
 
 echo "--- [DEBUG] STARTING DASHBOARD CONTAINER ---"
 
+# Read env var provided by Cloud Run, default to 8080
 PORT="${PORT:-8080}"
 echo "--- [DEBUG] PORT = $PORT"
 
 CONFIG_FILE="/etc/nginx/conf.d/default.conf"
 
-echo "--- [DEBUG] Original nginx.conf: ---"
+echo "--- [DEBUG] Original nginx.conf (before sed): ---"
 cat $CONFIG_FILE
 echo "----------------------------------------"
 

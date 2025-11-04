@@ -195,6 +195,7 @@ jobs:
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} \
             --region=${{ env.REGION }} \
             --allow-unauthenticated
+          
           gcloud run services update-traffic ${{ env.DASHBOARD_SERVICE_NAME }} --region=${{ env.REGION }} --to-latest
   # =====================================================================================
   # JOB 5: VALIDATE DEPLOYMENT (Runs on Merge, after Apps are deployed)
