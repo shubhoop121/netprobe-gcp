@@ -1,48 +1,43 @@
+# apps/api/app.py (Final Version)
+
 import os
 import sys
-import logging # Import the logging module
+import logging
+import sqlalchemy
 from flask import Flask, jsonify
 from google.cloud import secretmanager
-import sqlalchemy
 
 # --- Set up a loud logger ---
-# Get the root logger
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG) # Log everything at DEBUG level and above
-
-# Create a handler that writes to stderr
+logger.setLevel(logging.DEBUG)
 stderr_handler = logging.StreamHandler(sys.stderr)
 stderr_handler.setLevel(logging.DEBUG)
-
-# Create a formatter
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 stderr_handler.setFormatter(formatter)
-
-# Add the handler to the logger
 logger.addHandler(stderr_handler)
 # --- End of logger setup ---
 
-
 app = Flask(__name__)
 
-# --- Configuration ---
+# --- Configuration (read at import time) ---
 DB_USER = os.environ.get("DB_USER", "netprobe_user")
 PROJECT_ID = os.environ.get("PROJECT_ID", "netprobe-473119")
 DB_NAME = os.environ.get("DB_NAME", "netprobe_logs")
 DB_HOST = os.environ.get("DB_HOST") # Injected by Cloud Run
 
+# --- THIS IS THE FIX (Part 1) ---
+# Create a global 'db' variable, but leave it as None.
+# We will initialize it "lazily" on the first request.
 db = None
+# --- END FIX ---
 
 def get_db_password():
     """Fetches the database password."""
-    
-    # Check for local env var first (for local dev)
     db_pass = os.environ.get("DB_PASSWORD")
     if db_pass:
         logger.info("--- Found DB_PASSWORD in environment variable (local dev) ---")
         return db_pass
 
-    # Fall back to Secret Manager
     logger.info("--- DB_PASSWORD env var not set. Fetching from Secret Manager... ---")
     try:
         client = secretmanager.SecretManagerServiceClient()
@@ -52,7 +47,6 @@ def get_db_password():
         logger.info("--- Successfully fetched 'db-password' from Secret Manager. ---")
         return password
     except Exception as e:
-        # This is the log we've been missing
         logger.error(f"!!! CRITICAL: Error fetching secret from Secret Manager: {e}", exc_info=True)
         return None
 
@@ -88,18 +82,21 @@ def init_connection_pool() -> sqlalchemy.engine.base.Engine:
     logger.info("--- Connection pool created successfully. ---")
     return pool
 
-@app.before_request
-def init_db():
-    """Initializes the database connection pool before each request."""
+# --- THIS IS THE FIX (Part 2) ---
+# Use a global function to get the database connection.
+# This ensures init_connection_pool() is only called when a request
+# actually comes in, not when the container is importing the script.
+def get_db():
     global db
     if not db:
-        logger.info("--- 'db' object is None. Attempting to initialize connection pool... ---")
+        logger.info("--- 'db' object is None. Initializing connection pool... ---")
         try:
             db = init_connection_pool()
         except Exception as e:
-            # THIS IS THE LOG WE ARE LOOKING FOR
             logger.error(f"!!! CRITICAL: Failed to initialize database connection: {e}", exc_info=True)
             db = None # Keep it None so we can see the error
+    return db
+# --- END FIX ---
 
 @app.route("/")
 def index():
@@ -111,14 +108,17 @@ def index():
 def ping_db():
     """Tests the database connection."""
     logger.info("--- GET /ping-db ---")
-    if not db:
+    # Use the get_db() function
+    conn = get_db()
+    
+    if not conn:
         logger.error("--- /ping-db: Failing request because 'db' object is None. ---")
         return jsonify(error="Database connection not initialized"), 500
     
     try:
         logger.info("--- /ping-db: Pinging database with 'SELECT 1' ---")
-        with db.connect() as conn:
-            result = conn.execute(sqlalchemy.text("SELECT 1")).scalar()
+        with conn.connect() as c:
+            result = c.execute(sqlalchemy.text("SELECT 1")).scalar()
             if result == 1:
                 logger.info("--- /ping-db: Database ping successful. ---")
                 return jsonify(status="ok", message="Database connection successful")
@@ -132,4 +132,6 @@ def ping_db():
 # --- (Other endpoints like /api/connections/latest) ---
 
 if __name__ == "__main__":
+    # This part is only for local dev (python app.py)
+    # Gunicorn does not run this.
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
