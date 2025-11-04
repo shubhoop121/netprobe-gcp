@@ -191,13 +191,12 @@ jobs:
           
       - name: "Deploy Dashboard to Cloud Run"
         run: |
-          INTERNAL_API_URL="http://netprobe-api/"
-          
+          INTERNAL_API_URL="http://netprobe-api/"          
           gcloud run deploy ${{ env.DASHBOARD_SERVICE_NAME }} \
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} \
             --region=${{ env.REGION }} \
             --allow-unauthenticated \
-            --set-env-vars="API_SERVICE_URL=$INTERNAL_API_URL"          
+            --set-env-vars="API_SERVICE_URL=$INTERNAL_API_URL"
           gcloud run services update-traffic ${{ env.DASHBOARD_SERVICE_NAME }} --region=${{ env.REGION }} --to-latest
 
   # =====================================================================================
