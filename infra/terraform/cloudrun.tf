@@ -74,6 +74,10 @@ resource "google_cloud_run_v2_service" "dashboard" {
     containers {
       image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
     }
+    vpc_access {
+      connector = google_vpc_access_connector.main.id
+      egress    = "ALL_TRAFFIC"
+    }
     service_account = data.google_compute_default_service_account.default.email
   }
 
