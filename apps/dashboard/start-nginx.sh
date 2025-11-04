@@ -23,4 +23,4 @@ cat $CONFIG_FILE
 echo "----------------------------------------"
 
 echo "--- [DEBUG] Starting Nginx... ---"
-nginx -g 'daemon off;'minor fix 114
+nginx -g 'daemon off;'
