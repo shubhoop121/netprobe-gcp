@@ -16,11 +16,11 @@ cat $CONFIG_FILE
 echo "----------------------------------------"
 
 sed -i "s|__PORT__|$PORT|g" $CONFIG_FILE
-sed -i "s|__API_SERVICE_URL__;|$API_URL/;|g" $CONFIG_FILE
+sed -i "s|__API_SERVICE_URL__|${API_URL}|g" $CONFIG_FILE
 
 echo "--- [DEBUG] FINAL NGINX CONFIG (after sed): ---"
 cat $CONFIG_FILE
 echo "----------------------------------------"
 
 echo "--- [DEBUG] Starting Nginx... ---"
-nginx -g 'daemon off;'
+nginx -g 'daemon off;'minor fix 114
