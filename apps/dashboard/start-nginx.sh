@@ -15,7 +15,6 @@ echo "--- [DEBUG] Original nginx.conf: ---"
 cat $CONFIG_FILE
 echo "----------------------------------------"
 
-
 sed -i "s|__PORT__|$PORT|g" $CONFIG_FILE
 sed -i "s|__API_SERVICE_URL__;|$API_URL/;|g" $CONFIG_FILE
 
