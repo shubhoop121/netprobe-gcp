@@ -28,9 +28,6 @@ resource "google_project_iam_member" "api_runtime_sa_secret_accessor" {
 # -----------------------------------------------------------------
 # 1. CREATE DEDICATED SERVICE ACCOUNTS (SAs)
 # -----------------------------------------------------------------
-# We create one SA for the API and one for the Dashboard.
-# This follows the principle of least privilege.
-
 resource "google_service_account" "api_sa" {
   account_id   = "netprobe-api"
   display_name = "NetProbe API Runtime SA"
@@ -48,14 +45,12 @@ resource "google_service_account" "dashboard_sa" {
 # -----------------------------------------------------------------
 # The API service needs to connect to the database and read secrets.
 
-# Allows the API to access the DB password from Secret Manager
 resource "google_project_iam_member" "api_sa_secret_accessor" {
   project = var.project_id
   role    = "roles/secretmanager.secretAccessor"
   member  = google_service_account.api_sa.member
 }
 
-# Allows the API to connect to the Cloud SQL database
 resource "google_project_iam_member" "api_sa_sql_client" {
   project = var.project_id
   role    = "roles/cloudsql.client"
@@ -66,34 +61,23 @@ resource "google_project_iam_member" "api_sa_sql_client" {
 # 3. GRANT PERMISSIONS BETWEEN SERVICES (THE 403 FIX)
 # -----------------------------------------------------------------
 # This explicitly allows the Dashboard to invoke the API.
-# This is the fix for the 403 Forbidden error.
-
 resource "google_cloud_run_service_iam_member" "dashboard_to_api_invoker" {
   project  = google_cloud_run_service.api.project
   location = google_cloud_run_service.api.location
   service  = google_cloud_run_service.api.name
   role     = "roles/run.invoker"
-
-  # Member: The Dashboard SA
-  # Resource: The API Service
   member   = google_service_account.dashboard_sa.member
 }
 
 # -----------------------------------------------------------------
-# 4. GRANT PERMISSIONS TO THE CI/CD PIPELINE (THE 'actAs' FIX)
+# 4. GRANT "actAs" PERMISSION TO THE CI/CD PIPELINE (THE 'actAs' FIX)
 # -----------------------------------------------------------------
-# This allows your GitHub Actions (github-actions-sa) to
-# deploy services "as" the new SAs. This fixes the
-# 'iam.serviceaccounts.actAs' PERMISSION_DENIED error.
+# This grants the 'actAs' permission to your GitHub Actions SA
+# at the PROJECT level, which is more robust and solves the
+# gcloud PERMISSION_DENIED error.
 
-resource "google_service_account_iam_member" "github_actas_api" {
-  service_account_id = google_service_account.api_sa.name
-  role               = "roles/iam.serviceAccountUser"
-  member             = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
-}
-
-resource "google_service_account_iam_member" "github_actas_dashboard" {
-  service_account_id = google_service_account.dashboard_sa.name
-  role               = "roles/iam.serviceAccountUser"
-  member             = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
+resource "google_project_iam_member" "github_actas" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
 }
