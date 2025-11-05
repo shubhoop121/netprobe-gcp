@@ -65,14 +65,20 @@ const apiProxy = createProxyMiddleware({
 // --- 3. App Routing ---
 
 // All requests to '/api' go to our authenticated proxy
-app.use('/api', apiProxy);
+app.use('/api/*', apiProxy);
 
 // All other requests serve the static React app
 app.use(express.static(staticDir));
 
 // Fallback for React Router (handles page reloads on sub-routes)
 app.get('*', (req, res) => {
-  res.sendFile(path.join(staticDir, 'index.html'));
+  const file = path.join(staticDir, 'index.html');
+  res.sendFile(file, (err) => {
+    if (err) {
+      console.error(`[Static] Could not send file: ${file}`, err);
+      res.status(500).send('Internal server error loading application.');
+    }
+  });
 });
 
 // --- 4. Start Server ---
