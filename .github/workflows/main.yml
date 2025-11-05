@@ -110,6 +110,12 @@ jobs:
           DB_IP=$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip)
           echo "$DB_IP" | gcloud secrets versions add db-private-ip-live --data-file=-
 
+      - name: "Wait for IAM Propagation"
+        if: always()
+        run: |
+          echo "--- Waiting 60 seconds for IAM permissions to propagate... ---"
+          sleep 60
+          echo "--- Proceeding. ---"
   # ======================================================================================
   # JOB 3: DEPLOY API (Runs on Merge to main, after Infra)
   # ======================================================================================
