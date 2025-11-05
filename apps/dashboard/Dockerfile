@@ -1,31 +1,30 @@
-# apps/dashboard/Dockerfile (Final Version)
-
-# --- Build Stage ---
-# Use Node 20
+# --- 1. Build Stage ---
+# This stage builds the React app
 FROM node:20-alpine AS build
-
 WORKDIR /app
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
-
 COPY . .
 RUN yarn build
+# The result is in /app/dist
 
-# --- Serve Stage ---
-FROM nginx:1.25-alpine
+# --- 2. Serve Stage ---
+# This stage creates a slim, secure production server
+FROM node:20-alpine
+WORKDIR /app
 
-# Copy the static build files
-COPY --from=build /app/dist /usr/share/nginx/html
+# Copy only the files needed for the Node.js server
+COPY package.json yarn.lock ./
 
-# Copy the Nginx config that has the new resolver logic
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+RUN yarn install --production
 
-# Copy the startup script (which now only sets the PORT)
-COPY start-nginx.sh /start-nginx.sh
-RUN chmod +x /start-nginx.sh
+COPY server.js .
 
-# Expose 80 (Nginx default, but good practice)
-EXPOSE 80
+# Copy the built React app from the 'build' stage
+COPY --from=build /app/dist ./dist
 
-# Run the startup script
-CMD ["/start-nginx.sh"]
+# Expose the port Cloud Run provides
+EXPOSE ${PORT:-8080}
+
+# The command to run our server
+CMD ["node", "server.js"]
