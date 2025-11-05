@@ -64,7 +64,7 @@ resource "google_cloud_run_service" "api" {
       containers {
         image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
       }
-      service_account_name = data.google_compute_default_service_account.default.email
+      service_account_name = google_service_account.api_sa.email
     }
   }
 
@@ -104,7 +104,7 @@ resource "google_cloud_run_service" "dashboard" {
       containers {
         image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
       }
-      service_account_name = data.google_compute_default_service_account.default.email
+      service_account_name = google_service_account.dashboard_sa.email
     }
   }
 

@@ -26,12 +26,43 @@ resource "google_project_iam_member" "api_runtime_sa_secret_accessor" {
   member  = "serviceAccount:${data.google_compute_default_service_account.default.email}"
 }
 
-resource "google_cloud_run_service_iam_member" "dashboard_to_api_invoker" { # <-- CHANGE: REMOVED _v2
-  project  = google_cloud_run_service.api.project   # <-- Change to v1
-  location = google_cloud_run_service.api.location  # <-- Change to v1
-  service  = google_cloud_run_service.api.name      # <-- Change to v1
+# --- 1. Define Dedicated Service Accounts ---
+resource "google_service_account" "api_sa" {
+  account_id   = "netprobe-api"
+  display_name = "NetProbe API Runtime SA"
+  project      = var.project_id
+}
+
+resource "google_service_account" "dashboard_sa" {
+  account_id   = "netprobe-dashboard"
+  display_name = "NetProbe Dashboard Runtime SA"
+  project      = var.project_id
+}
+
+# --- 2. Grant API SA Required Permissions ---
+# The API service needs to access Secret Manager for the DB password
+resource "google_project_iam_member" "api_sa_secret_accessor" {
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = google_service_account.api_sa.member
+}
+
+# The API service needs to connect to the Cloud SQL database
+resource "google_project_iam_member" "api_sa_sql_client" {
+  project = var.project_id
+  role    = "roles/cloudsql.client"
+  member  = google_service_account.api_sa.member
+}
+
+# --- 3. Grant Dashboard SA Permission to Invoke API ---
+# This is the explicit fix for the 403 error.
+# It clearly states: "Dashboard" can invoke "API".
+resource "google_cloud_run_service_iam_member" "dashboard_to_api_invoker" {
+  project  = google_cloud_run_service.api.project
+  location = google_cloud_run_service.api.location
+  service  = google_cloud_run_service.api.name
   role     = "roles/run.invoker"
 
   # The member is the identity of the DASHBOARD service
-  member   = "serviceAccount:${data.google_compute_default_service_account.default.email}"
+  member   = google_service_account.dashboard_sa.member
 }
