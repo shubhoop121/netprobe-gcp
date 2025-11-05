@@ -43,17 +43,23 @@ resource "google_cloud_run_service" "api" {
   project  = var.project_id
   location = var.region
 
-  # --- THIS IS THE FIX ---
-  # The metadata block goes here, at the Service level.
+  # --- FIX 1 ---
+  # 'ingress' annotation goes here, at the Service level
   metadata {
     annotations = {
-      "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.main.id
-      "run.googleapis.com/vpc-access-egress"    = "private-ranges-only"
-      "run.googleapis.com/ingress"              = "internal"
+      "run.googleapis.com/ingress" = "internal"
     }
   }
 
   template {
+    # --- FIX 2 ---
+    # VPC annotations go here, on the Revision template
+    metadata {
+      annotations = {
+        "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.main.id
+        "run.googleapis.com/vpc-access-egress"    = "private-ranges-only"
+      }
+    }
     spec {
       containers {
         image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
@@ -77,17 +83,23 @@ resource "google_cloud_run_service" "dashboard" {
   project  = var.project_id
   location = var.region
 
-  # --- THIS IS THE FIX ---
-  # This metadata block is also at the Service level.
+  # --- FIX 1 ---
+  # 'ingress' annotation goes here, at the Service level
   metadata {
     annotations = {
-      "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.main.id
-      "run.googleapis.com/vpc-access-egress"    = "all-traffic"
-      "run.googleapis.com/ingress"              = "all"
+      "run.googleapis.com/ingress" = "all"
     }
   }
 
   template {
+    # --- FIX 2 ---
+    # VPC annotations go here, on the Revision template
+    metadata {
+      annotations = {
+        "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.main.id
+        "run.googleapis.com/vpc-access-egress"    = "all-traffic"
+      }
+    }
     spec {
       containers {
         image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
