@@ -31,7 +31,7 @@ const apiProxy = createProxyMiddleware({
   target: targetApiUrl,
   changeOrigin: true, // Required for Cloud Run
   pathRewrite: {
-    '^/api': '/', // Rewrites '/api/ping-db' to '/ping-db'
+    '^/api': '', // Rewrites '/api/ping-db' to '/ping-db'
   },
   
   // This is the "magic" that fixes the 401/403 errors
