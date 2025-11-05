@@ -1,11 +1,10 @@
-// apps/dashboard/server.js (FINAL, with DNS DEBUGGING)
 import express from 'express';
 import path from 'path';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { GoogleAuth } from 'google-auth-library';
 import { fileURLToPath } from 'url';
 import https from 'https';
-import dns from 'node-dns';
+import { Resolver } from 'node:dns/promises'; // Use built-in DNS
 
 // --- Configuration ---
 const app = express();
@@ -32,44 +31,28 @@ if (!targetApiUrl || !audienceApiUrl) {
 const auth = new GoogleAuth();
 let idTokenClient;
 
-// --- 2. CUSTOM DNS AGENT (with DEBUG LOGS) ---
+// --- 2. CUSTOM DNS AGENT (using built-in Node.js Resolver) ---
+console.log('[DNS] Initializing Google DNS Resolver (169.254.169.254)...');
+const resolver = new Resolver();
+resolver.setServers(['169.254.169.254']);
+
 const googleDnsAgent = new https.Agent({
-  lookup: (hostname, options, callback) => {
-    // NEW LOG
+  lookup: async (hostname, options, callback) => {
     console.log(`[DNS] Attempting to resolve: ${hostname}`);
-    
-    const resolver = new dns.Request({
-      question: dns.Question({ name: hostname, type: 'A' }),
-      server: { address: '169.254.169.254', port: 53, type: 'udp' },
-      timeout: 5000,
-    });
-
-    resolver.on('timeout', () => {
-      // NEW LOG
-      console.error('[DNS] Error: Query timed out for ' + hostname);
-      callback(new Error('DNS query timed out'), null, null);
-    });
-
-    resolver.on('message', (err, msg) => {
-      if (err) {
-        // NEW LOG
-        console.error(`[DNS] Error: ${err.message}`);
-        return callback(err, null, null);
-      }
-      
-      if (msg.answer.length === 0) {
-        // NEW LOG
+    try {
+      const addresses = await resolver.resolve4(hostname);
+      if (!addresses || addresses.length === 0) {
         console.error(`[DNS] Error: No IP found for ${hostname}`);
         return callback(new Error(`No IP found for ${hostname}`), null, null);
       }
       
-      const ip = msg.answer.map(a => a.address)[0];
-      // NEW LOG
+      const ip = addresses[0];
       console.log(`[DNS] Resolved ${hostname} to ${ip}`);
       callback(null, ip, 4); // family 4 = IPv4
-    });
-
-    resolver.send();
+    } catch (err) {
+      console.error(`[DNS] Error: ${err.message}`);
+      callback(err, null, null);
+    }
   },
 });
 // --- END CUSTOM AGENT ---
@@ -78,8 +61,8 @@ const googleDnsAgent = new https.Agent({
 // --- 3. Authenticated Proxy ---
 console.log(`[Init] Setting up proxy for target: ${targetApiUrl}`);
 const apiProxy = createProxyMiddleware({
-  target: targetApiUrl,
-  agent: googleDnsAgent, // Use our custom agent
+  target: targetApiUrl,    // Use public URL (e.g., https://netprobe-api-...)
+  agent: googleDnsAgent,   // USE OUR CUSTOM DNS AGENT
   changeOrigin: true,
   pathRewrite: {
     '^/api': '',
