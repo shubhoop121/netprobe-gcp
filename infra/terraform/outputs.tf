@@ -17,3 +17,13 @@ output "test_workload_vm_zone" {
   description = "The zone of the test workload VM."
   value       = length(google_compute_instance.test_workload) > 0 ? google_compute_instance.test_workload[0].zone : "not_created"
 }
+
+output "api_service_url" {
+  description = "The public URL of the netprobe-api service"
+  value       = google_cloud_run_service.api.status[0].url
+}
+
+output "dashboard_service_url" {
+  description = "The public URL of the netprobe-dashboard service"
+  value       = google_cloud_run_service.dashboard.status[0].url
+}
