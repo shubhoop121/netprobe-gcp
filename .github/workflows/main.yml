@@ -94,6 +94,7 @@ jobs:
           echo "--- NVA cluster is stable. Proceeding. ---"
       
       - name: "Trigger Cloud Build for Schema Creation"
+        if: "!contains(github.event.head_commit.message, '[skip-builds]')"
         run: 'gcloud builds submit --config=cloudbuild-schema.yaml --project=${{ env.PROJECT_ID }} --region=${{ env.REGION }} --quiet'
 
       - name: "Get Terraform Outputs for Validation Jobs"
@@ -251,6 +252,7 @@ jobs:
             --command="curl -v https://google.com"
 
       - name: "Trigger Cloud Build for Validation"
+        if: "!contains(github.event.head_commit.message, '[skip-builds]')"
         run: |
           gcloud builds submit --config=cloudbuild-validate.yaml --project=${{ env.PROJECT_ID }} --region=${{ env.REGION }} --quiet
 

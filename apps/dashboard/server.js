@@ -14,6 +14,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const staticDir = path.join(__dirname, 'dist');
 
+app.use((req, res, next) => {
+  console.log(`[Logger] Received request: ${req.method} ${req.path}`);
+  next(); // Continue to the next middleware
+});
+
 if (!targetApiUrl) {
   console.error('CRITICAL: API_URL environment variable is not set. Shutting down.');
   process.exit(1);
