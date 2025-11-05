@@ -47,6 +47,7 @@ const apiProxy = createProxyMiddleware({
         idTokenClient = await auth.getIdTokenClient(audienceApiUrl);
       }
       const token = await idTokenClient.idTokenProvider.fetchIdToken();
+      proxyReq.setHeader('Host', new URL(targetApiUrl).hostname);
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
       console.log(`[Proxy] Forwarding authenticated request to: ${targetApiUrl}${req.path}`);
     } catch (err) {
