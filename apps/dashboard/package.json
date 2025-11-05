@@ -14,7 +14,8 @@
     "react-dom": "^19.1.1",
     "express": "^4.19.2",
     "google-auth-library": "^9.11.0",
-    "http-proxy-middleware": "^3.0.0"
+    "http-proxy-middleware": "^3.0.0",
+    "node-dns": "^0.1.0" 
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

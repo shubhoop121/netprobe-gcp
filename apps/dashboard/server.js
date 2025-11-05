@@ -1,9 +1,11 @@
-// apps/dashboard/server.js (FINAL, CORRECTED VERSION)
+// apps/dashboard/server.js (FINAL, with DNS DEBUGGING)
 import express from 'express';
 import path from 'path';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { GoogleAuth } from 'google-auth-library';
 import { fileURLToPath } from 'url';
+import https from 'https';
+import dns from 'node-dns';
 
 // --- Configuration ---
 const app = express();
@@ -12,9 +14,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const staticDir = path.join(__dirname, 'dist');
 
-// --- THIS IS THE CHANGE (Part 1) ---
-const targetApiUrl = process.env.API_TARGET_URL; // e.g., http://netprobe-api:8080
-const audienceApiUrl = process.env.API_AUDIENCE_URL; // e.g., https://netprobe-api-....run.app
+const targetApiUrl = process.env.API_TARGET_URL;
+const audienceApiUrl = process.env.API_AUDIENCE_URL;
 
 // --- 0. Request Logger ---
 app.use((req, res, next) => {
@@ -31,23 +32,64 @@ if (!targetApiUrl || !audienceApiUrl) {
 const auth = new GoogleAuth();
 let idTokenClient;
 
-// --- 2. Authenticated Proxy ---
+// --- 2. CUSTOM DNS AGENT (with DEBUG LOGS) ---
+const googleDnsAgent = new https.Agent({
+  lookup: (hostname, options, callback) => {
+    // NEW LOG
+    console.log(`[DNS] Attempting to resolve: ${hostname}`);
+    
+    const resolver = new dns.Request({
+      question: dns.Question({ name: hostname, type: 'A' }),
+      server: { address: '169.254.169.254', port: 53, type: 'udp' },
+      timeout: 5000,
+    });
+
+    resolver.on('timeout', () => {
+      // NEW LOG
+      console.error('[DNS] Error: Query timed out for ' + hostname);
+      callback(new Error('DNS query timed out'), null, null);
+    });
+
+    resolver.on('message', (err, msg) => {
+      if (err) {
+        // NEW LOG
+        console.error(`[DNS] Error: ${err.message}`);
+        return callback(err, null, null);
+      }
+      
+      if (msg.answer.length === 0) {
+        // NEW LOG
+        console.error(`[DNS] Error: No IP found for ${hostname}`);
+        return callback(new Error(`No IP found for ${hostname}`), null, null);
+      }
+      
+      const ip = msg.answer.map(a => a.address)[0];
+      // NEW LOG
+      console.log(`[DNS] Resolved ${hostname} to ${ip}`);
+      callback(null, ip, 4); // family 4 = IPv4
+    });
+
+    resolver.send();
+  },
+});
+// --- END CUSTOM AGENT ---
+
+
+// --- 3. Authenticated Proxy ---
 console.log(`[Init] Setting up proxy for target: ${targetApiUrl}`);
 const apiProxy = createProxyMiddleware({
-  target: targetApiUrl, // Use the internal URL
+  target: targetApiUrl,
+  agent: googleDnsAgent, // Use our custom agent
   changeOrigin: true,
   pathRewrite: {
-    '^/api': '', // Rewrites /api/ping-db to /ping-db
+    '^/api': '',
   },
   onProxyReq: async (proxyReq, req, res) => {
     try {
       if (!idTokenClient) {
-        // --- THIS IS THE CHANGE (Part 2) ---
-        // Use the *audience* URL to get the token
         idTokenClient = await auth.getIdTokenClient(audienceApiUrl);
       }
       const token = await idTokenClient.idTokenProvider.fetchIdToken();
-      proxyReq.setHeader('Host', new URL(targetApiUrl).hostname);
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
       console.log(`[Proxy] Forwarding authenticated request to: ${targetApiUrl}${req.path}`);
     } catch (err) {
@@ -61,7 +103,7 @@ const apiProxy = createProxyMiddleware({
   }
 });
 
-// --- 3. App Routing (ORDER IS CRITICAL) ---
+// --- 4. App Routing ---
 console.log('[Init] Registering /api route');
 app.use('/api', apiProxy);
 
@@ -75,12 +117,12 @@ app.get('*', (req, res) => {
   res.sendFile(file, (err) => {
     if (err) {
       console.error(`[Fallback] Error: Could not send file: ${file}`, err);
-      res.status(5.00).send('Internal server error: index.html not found.');
+      res.status(500).send('Internal server error: index.html not found.');
     }
   });
 });
 
-// --- 4. Start Server ---
+// --- 5. Start Server ---
 app.listen(port, () => {
   console.log(`[Init] Server listening on port ${port}`);
   console.log(`[Init] Serving static files from: ${staticDir}`);
