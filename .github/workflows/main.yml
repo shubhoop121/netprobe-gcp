@@ -199,7 +199,7 @@ jobs:
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} \
             --region=${{ env.REGION }} \
             --vpc-connector="netprobe-vpc-connector" \
-            --vpc-egress=private-ranges-only \
+            --vpc-egress=all-traffic \
             --set-env-vars="^::^API_TARGET_URL=${{ needs.deploy-api.outputs.api_url }}::API_AUDIENCE_URL=${{ needs.deploy-api.outputs.api_url }}" \
             --allow-unauthenticated
   # =====================================================================================

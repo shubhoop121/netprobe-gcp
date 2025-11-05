@@ -75,7 +75,7 @@ resource "google_cloud_run_v2_service" "dashboard" {
     }
     vpc_access {
       connector = google_vpc_access_connector.main.id
-      egress    = "PRIVATE_RANGES_ONLY"
+      egress    = "ALL_TRAFFIC"
     }
     service_account = data.google_compute_default_service_account.default.email
   }

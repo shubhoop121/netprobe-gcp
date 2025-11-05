@@ -1,10 +1,9 @@
+// apps/dashboard/server.js (FINAL, NO DNS HACK)
 import express from 'express';
 import path from 'path';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { GoogleAuth } from 'google-auth-library';
 import { fileURLToPath } from 'url';
-import https from 'https';
-import { Resolver } from 'node:dns/promises'; // Use built-in DNS
 
 // --- Configuration ---
 const app = express();
@@ -31,41 +30,13 @@ if (!targetApiUrl || !audienceApiUrl) {
 const auth = new GoogleAuth();
 let idTokenClient;
 
-// --- 2. CUSTOM DNS AGENT (using built-in Node.js Resolver) ---
-console.log('[DNS] Initializing Google DNS Resolver (169.254.169.254)...');
-const resolver = new Resolver();
-resolver.setServers(['169.254.169.254']);
-
-const googleDnsAgent = new https.Agent({
-  lookup: async (hostname, options, callback) => {
-    console.log(`[DNS] Attempting to resolve: ${hostname}`);
-    try {
-      const addresses = await resolver.resolve4(hostname);
-      if (!addresses || addresses.length === 0) {
-        console.error(`[DNS] Error: No IP found for ${hostname}`);
-        return callback(new Error(`No IP found for ${hostname}`), null, null);
-      }
-      
-      const ip = addresses[0];
-      console.log(`[DNS] Resolved ${hostname} to ${ip}`);
-      callback(null, ip, 4); // family 4 = IPv4
-    } catch (err) {
-      console.error(`[DNS] Error: ${err.message}`);
-      callback(err, null, null);
-    }
-  },
-});
-// --- END CUSTOM AGENT ---
-
-
-// --- 3. Authenticated Proxy ---
+// --- 2. Authenticated Proxy ---
 console.log(`[Init] Setting up proxy for target: ${targetApiUrl}`);
 const apiProxy = createProxyMiddleware({
   target: targetApiUrl,    // Use public URL (e.g., https://netprobe-api-...)
-  agent: googleDnsAgent,   // USE OUR CUSTOM DNS AGENT
-  changeOrigin: true,
+  changeOrigin: true,      // Required
   pathRewrite: {
-    '^/api': '',
+    '^/api': '', // Rewrites /api/ping-db to /ping-db
   },
   onProxyReq: async (proxyReq, req, res) => {
     try {
@@ -86,7 +57,7 @@ const apiProxy = createProxyMiddleware({
   }
 });
 
-// --- 4. App Routing ---
+// --- 3. App Routing ---
 console.log('[Init] Registering /api route');
 app.use('/api', apiProxy);
 
@@ -105,7 +76,7 @@ app.get('*', (req, res) => {
   });
 });
 
-// --- 5. Start Server ---
+// --- 4. Start Server ---
 app.listen(port, () => {
   console.log(`[Init] Server listening on port ${port}`);
   console.log(`[Init] Serving static files from: ${staticDir}`);
