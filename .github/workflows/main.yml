@@ -161,8 +161,8 @@ jobs:
           set -e
           for i in 1 2 3; do
             echo "--- 'actAs' test attempt $i of 3 ---"
-            # This is your isolated test command:
-            gcloud auth whoami --impersonate-service-account=sa-netprobe-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            # This is the correct isolated test command:
+            gcloud auth print-identity-token --impersonate-service-account=sa-netprobe-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
               && echo "--- 'actAs' permission confirmed on attempt $i ---" \
               && break
             
