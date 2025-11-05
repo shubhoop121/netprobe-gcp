@@ -43,16 +43,17 @@ resource "google_cloud_run_service" "api" {
   project  = var.project_id
   location = var.region
 
-  template {
-    metadata {
-      annotations = {
-        # --- This block replaces vpc_access ---
-        "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.main.id
-        "run.googleapis.com/vpc-access-egress"    = "private-ranges-only"
-        # --- This replaces the ingress setting ---
-        "run.googleapis.com/ingress"              = "internal"
-      }
+  # --- THIS IS THE FIX ---
+  # The metadata block goes here, at the Service level.
+  metadata {
+    annotations = {
+      "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.main.id
+      "run.googleapis.com/vpc-access-egress"    = "private-ranges-only"
+      "run.googleapis.com/ingress"              = "internal"
     }
+  }
+
+  template {
     spec {
       containers {
         image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
@@ -76,16 +77,17 @@ resource "google_cloud_run_service" "dashboard" {
   project  = var.project_id
   location = var.region
 
-  template {
-    metadata {
-      annotations = {
-        # --- This block replaces vpc_access ---
-        "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.main.id
-        "run.googleapis.com/vpc-access-egress"    = "all-traffic"
-        # --- This replaces the ingress setting (for --allow-unauthenticated) ---
-        "run.googleapis.com/ingress"              = "all"
-      }
+  # --- THIS IS THE FIX ---
+  # This metadata block is also at the Service level.
+  metadata {
+    annotations = {
+      "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.main.id
+      "run.googleapis.com/vpc-access-egress"    = "all-traffic"
+      "run.googleapis.com/ingress"              = "all"
     }
+  }
+
+  template {
     spec {
       containers {
         image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
