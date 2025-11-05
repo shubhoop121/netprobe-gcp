@@ -1,4 +1,4 @@
-// apps/dashboard/server.js (DEBUGGING VERSION)
+// apps/dashboard/server.js (FINAL CLEAN VERSION)
 import express from 'express';
 import path from 'path';
 import { createProxyMiddleware } from 'http-proxy-middleware';
@@ -13,13 +13,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const staticDir = path.join(__dirname, 'dist');
 
-// --- 0. SQUEAKY-WHEEL LOGGER ---
-// This logs EVERY request that hits the server, BEFORE any routes.
+// --- 0. Request Logger ---
 app.use((req, res, next) => {
-  console.log(`[Logger] Received request: ${req.method} ${req.path}`);
-  next(); // Continue to the next middleware
+  console.log(`[Logger] Received: ${req.method} ${req.path}`);
+  next();
 });
-// --- End Logger ---
 
 if (!targetApiUrl) {
   console.error('CRITICAL: API_URL environment variable is not set. Shutting down.');
@@ -30,49 +28,51 @@ if (!targetApiUrl) {
 const auth = new GoogleAuth();
 let idTokenClient;
 
-// --- 2. Authenticated Proxy Setup ---
-console.log(`[Proxy] Setting up proxy to target: ${targetApiUrl}`);
+// --- 2. Authenticated Proxy ---
+console.log(`[Init] Setting up proxy for target: ${targetApiUrl}`);
 const apiProxy = createProxyMiddleware({
   target: targetApiUrl,
   changeOrigin: true,
   pathRewrite: {
-    '^/api': '', // This is correct.
+    '^/api': '', // Rewrites /api/ping-db to /ping-db
   },
   onProxyReq: async (proxyReq, req, res) => {
     try {
       if (!idTokenClient) {
-        console.log('[Auth] Initializing IdTokenClient...');
         idTokenClient = await auth.getIdTokenClient(targetApiUrl);
       }
       const token = await idTokenClient.idTokenProvider.fetchIdToken();
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
-      console.log(`[Proxy] Authenticated request to: ${targetApiUrl}${req.path}`);
+      console.log(`[Proxy] Forwarding authenticated request to: ${targetApiUrl}${req.path}`);
     } catch (err) {
-      console.error('[Auth] Failed to get identity token:', err);
+      console.error('[Proxy] Auth Error:', err.message);
       res.status(500).send('Failed to authenticate proxy request');
     }
   },
   onError: (err, req, res) => {
-    console.error('[Proxy] Proxy error:', err);
-    res.status(502).send('Proxy encountered an error.');
+    console.error('[Proxy] Connection Error:', err.message);
+    res.status(502).send('Proxy connection error');
   }
 });
 
-// --- 3. App Routing ---
-console.log('[Router] Registering /api route');
-// Use '/api' NOT '/api/*'. The proxy middleware handles sub-paths.
+// --- 3. App Routing (ORDER IS CRITICAL) ---
+
+// 3a. All API requests go to the proxy
+console.log('[Init] Registering /api route');
 app.use('/api', apiProxy);
 
-console.log('[Router] Registering static file route');
+// 3b. All static file requests (JS, CSS)
+console.log('[Init] Registering static file route');
 app.use(express.static(staticDir));
 
-console.log('[Router] Registering fallback route');
+// 3c. ALL other GET requests serve the React app
+console.log('[Init] Registering fallback route');
 app.get('*', (req, res) => {
-  console.log(`[Fallback] Serving index.html for: ${req.path}`);
+  console.log(`[Fallback] Serving index.html for ${req.path}`);
   const file = path.join(__dirname, 'dist', 'index.html');
   res.sendFile(file, (err) => {
     if (err) {
-      console.error(`[Fallback] CRITICAL: Could not send file: ${file}`, err);
+      console.error(`[Fallback] Error: Could not send file: ${file}`, err);
       res.status(500).send('Internal server error: index.html not found.');
     }
   });
@@ -80,7 +80,6 @@ app.get('*', (req, res) => {
 
 // --- 4. Start Server ---
 app.listen(port, () => {
-  console.log(`[Dashboard] Server listening on port ${port}`);
-  console.log(`[Dashboard] Serving static files from: ${staticDir}`);
-  console.log(`[Dashboard] Proxying /api requests to: ${targetApiUrl}`);
+  console.log(`[Init] Server listening on port ${port}`);
+  console.log(`[Init] Serving static files from: ${staticDir}`);
 });
