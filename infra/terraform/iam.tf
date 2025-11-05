@@ -25,8 +25,12 @@ resource "google_project_iam_member" "api_runtime_sa_secret_accessor" {
   role    = "roles/secretmanager.secretAccessor"
   member  = "serviceAccount:${data.google_compute_default_service_account.default.email}"
 }
+# -----------------------------------------------------------------
+# 1. CREATE DEDICATED SERVICE ACCOUNTS (SAs)
+# -----------------------------------------------------------------
+# We create one SA for the API and one for the Dashboard.
+# This follows the principle of least privilege.
 
-# --- 1. Define Dedicated Service Accounts ---
 resource "google_service_account" "api_sa" {
   account_id   = "netprobe-api"
   display_name = "NetProbe API Runtime SA"
@@ -39,30 +43,57 @@ resource "google_service_account" "dashboard_sa" {
   project      = var.project_id
 }
 
-# --- 2. Grant API SA Required Permissions ---
-# The API service needs to access Secret Manager for the DB password
+# -----------------------------------------------------------------
+# 2. GRANT PERMISSIONS TO THE API'S SA
+# -----------------------------------------------------------------
+# The API service needs to connect to the database and read secrets.
+
+# Allows the API to access the DB password from Secret Manager
 resource "google_project_iam_member" "api_sa_secret_accessor" {
   project = var.project_id
   role    = "roles/secretmanager.secretAccessor"
   member  = google_service_account.api_sa.member
 }
 
-# The API service needs to connect to the Cloud SQL database
+# Allows the API to connect to the Cloud SQL database
 resource "google_project_iam_member" "api_sa_sql_client" {
   project = var.project_id
   role    = "roles/cloudsql.client"
   member  = google_service_account.api_sa.member
 }
 
-# --- 3. Grant Dashboard SA Permission to Invoke API ---
-# This is the explicit fix for the 403 error.
-# It clearly states: "Dashboard" can invoke "API".
+# -----------------------------------------------------------------
+# 3. GRANT PERMISSIONS BETWEEN SERVICES (THE 403 FIX)
+# -----------------------------------------------------------------
+# This explicitly allows the Dashboard to invoke the API.
+# This is the fix for the 403 Forbidden error.
+
 resource "google_cloud_run_service_iam_member" "dashboard_to_api_invoker" {
   project  = google_cloud_run_service.api.project
   location = google_cloud_run_service.api.location
   service  = google_cloud_run_service.api.name
   role     = "roles/run.invoker"
 
-  # The member is the identity of the DASHBOARD service
+  # Member: The Dashboard SA
+  # Resource: The API Service
   member   = google_service_account.dashboard_sa.member
+}
+
+# -----------------------------------------------------------------
+# 4. GRANT PERMISSIONS TO THE CI/CD PIPELINE (THE 'actAs' FIX)
+# -----------------------------------------------------------------
+# This allows your GitHub Actions (github-actions-sa) to
+# deploy services "as" the new SAs. This fixes the
+# 'iam.serviceaccounts.actAs' PERMISSION_DENIED error.
+
+resource "google_service_account_iam_member" "github_actas_api" {
+  service_account_id = google_service_account.api_sa.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
+}
+
+resource "google_service_account_iam_member" "github_actas_dashboard" {
+  service_account_id = google_service_account.dashboard_sa.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
 }
