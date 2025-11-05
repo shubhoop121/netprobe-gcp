@@ -81,3 +81,15 @@ resource "google_project_iam_member" "github_actas" {
   role    = "roles/iam.serviceAccountUser"
   member  = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
 }
+
+resource "google_service_account_iam_member" "github_actas_api" {
+  service_account_id = google_service_account.api_sa.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
+}
+
+resource "google_service_account_iam_member" "github_actas_dashboard" {
+  service_account_id = google_service_account.dashboard_sa.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
+}
