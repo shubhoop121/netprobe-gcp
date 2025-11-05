@@ -1,4 +1,4 @@
-// apps/dashboard/server.js (FINAL CLEAN VERSION)
+// apps/dashboard/server.js (FINAL, CORRECTED VERSION)
 import express from 'express';
 import path from 'path';
 import { createProxyMiddleware } from 'http-proxy-middleware';
@@ -8,10 +8,13 @@ import { fileURLToPath } from 'url';
 // --- Configuration ---
 const app = express();
 const port = process.env.PORT || 8080;
-const targetApiUrl = process.env.API_URL;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const staticDir = path.join(__dirname, 'dist');
+
+// --- THIS IS THE CHANGE (Part 1) ---
+const targetApiUrl = process.env.API_TARGET_URL; // e.g., http://netprobe-api:8080
+const audienceApiUrl = process.env.API_AUDIENCE_URL; // e.g., https://netprobe-api-....run.app
 
 // --- 0. Request Logger ---
 app.use((req, res, next) => {
@@ -19,8 +22,8 @@ app.use((req, res, next) => {
   next();
 });
 
-if (!targetApiUrl) {
-  console.error('CRITICAL: API_URL environment variable is not set. Shutting down.');
+if (!targetApiUrl || !audienceApiUrl) {
+  console.error('CRITICAL: API_TARGET_URL or API_AUDIENCE_URL env vars not set. Shutting down.');
   process.exit(1);
 }
 
@@ -31,7 +34,7 @@ let idTokenClient;
 // --- 2. Authenticated Proxy ---
 console.log(`[Init] Setting up proxy for target: ${targetApiUrl}`);
 const apiProxy = createProxyMiddleware({
-  target: targetApiUrl,
+  target: targetApiUrl, // Use the internal URL
   changeOrigin: true,
   pathRewrite: {
     '^/api': '', // Rewrites /api/ping-db to /ping-db
@@ -39,7 +42,9 @@ const apiProxy = createProxyMiddleware({
   onProxyReq: async (proxyReq, req, res) => {
     try {
       if (!idTokenClient) {
-        idTokenClient = await auth.getIdTokenClient(targetApiUrl);
+        // --- THIS IS THE CHANGE (Part 2) ---
+        // Use the *audience* URL to get the token
+        idTokenClient = await auth.getIdTokenClient(audienceApiUrl);
       }
       const token = await idTokenClient.idTokenProvider.fetchIdToken();
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
@@ -56,16 +61,12 @@ const apiProxy = createProxyMiddleware({
 });
 
 // --- 3. App Routing (ORDER IS CRITICAL) ---
-
-// 3a. All API requests go to the proxy
 console.log('[Init] Registering /api route');
 app.use('/api', apiProxy);
 
-// 3b. All static file requests (JS, CSS)
 console.log('[Init] Registering static file route');
 app.use(express.static(staticDir));
 
-// 3c. ALL other GET requests serve the React app
 console.log('[Init] Registering fallback route');
 app.get('*', (req, res) => {
   console.log(`[Fallback] Serving index.html for ${req.path}`);
@@ -73,7 +74,7 @@ app.get('*', (req, res) => {
   res.sendFile(file, (err) => {
     if (err) {
       console.error(`[Fallback] Error: Could not send file: ${file}`, err);
-      res.status(500).send('Internal server error: index.html not found.');
+      res.status(5.00).send('Internal server error: index.html not found.');
     }
   });
 });
