@@ -38,11 +38,6 @@ resource "google_sql_database_instance" "netprobe_db" {
     ip_configuration {
       ipv4_enabled    = true
       private_network = google_compute_network.main.id
-
-      authorized_networks {
-        name  = "vpc-connector-range"
-        value = "10.0.3.0/28" # The range from cloudrun.tf
-      }
     }
 
     backup_configuration {
