@@ -1,5 +1,3 @@
-# apps/api/app.py (Final Version)
-
 import os
 import sys
 import logging
@@ -25,12 +23,7 @@ PROJECT_ID = os.environ.get("PROJECT_ID", "netprobe-473119")
 DB_NAME = os.environ.get("DB_NAME", "netprobe_logs")
 DB_HOST = os.environ.get("DB_HOST") # Injected by Cloud Run
 
-# --- THIS IS THE FIX (Part 1) ---
-# Create a global 'db' variable, but leave it as None.
-# We will initialize it "lazily" on the first request.
 db = None
-# --- END FIX ---
-
 def get_db_password():
     """Fetches the database password."""
     db_pass = os.environ.get("DB_PASSWORD")
@@ -82,10 +75,6 @@ def init_connection_pool() -> sqlalchemy.engine.base.Engine:
     logger.info("--- Connection pool created successfully. ---")
     return pool
 
-# --- THIS IS THE FIX (Part 2) ---
-# Use a global function to get the database connection.
-# This ensures init_connection_pool() is only called when a request
-# actually comes in, not when the container is importing the script.
 def get_db():
     global db
     if not db:
@@ -96,7 +85,6 @@ def get_db():
             logger.error(f"!!! CRITICAL: Failed to initialize database connection: {e}", exc_info=True)
             db = None # Keep it None so we can see the error
     return db
-# --- END FIX ---
 
 @app.route("/")
 def index():
@@ -108,7 +96,6 @@ def index():
 def ping_db():
     """Tests the database connection."""
     logger.info("--- GET /ping-db ---")
-    # Use the get_db() function
     conn = get_db()
     
     if not conn:
@@ -132,6 +119,4 @@ def ping_db():
 # --- (Other endpoints like /api/connections/latest) ---
 
 if __name__ == "__main__":
-    # This part is only for local dev (python app.py)
-    # Gunicorn does not run this.
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))

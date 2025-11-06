@@ -150,26 +150,6 @@ jobs:
           fi
           echo "DB_HOST=$LIVE_DB_IP" >> $GITHUB_ENV
           
-      - name: "Wait for 'actAs' Permission (with Retry)"
-        run: |
-          set -e
-          for i in 1 2 3; do
-            echo "--- 'actAs' test attempt $i of 3 ---"
-            # This is the correct isolated test command:
-            gcloud auth print-identity-token --impersonate-service-account=netprobe-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
-              && echo "--- 'actAs' permission confirmed on attempt $i ---" \
-              && break
-            
-            if [ $i -lt 3 ]; then
-              echo "--- 'actAs' test failed. Waiting 30 seconds for IAM to propagate... ---"
-              sleep 30
-            else
-              echo "--- 'actAs' test failed on all 3 attempts. ---"
-              exit 1
-            fi
-          done
-      
-      # --- This is the original deploy step, now safe to run ---
       - name: "Deploy API to Cloud Run"
         id: deploy_api
         run: |
@@ -214,25 +194,6 @@ jobs:
           docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} ./apps/dashboard
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }}
       
-      - name: "Wait for 'actAs' Permission (with Retry)"
-        run: |
-          set -e
-          for i in 1 2 3; do
-            echo "--- 'actAs' test attempt $i of 3 ---"
-            # This is the correct isolated test command:
-            gcloud auth print-identity-token --impersonate-service-account=netprobe-dashboard@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
-              && echo "--- 'actAs' permission confirmed on attempt $i ---" \
-              && break
-            
-            if [ $i -lt 3 ]; then
-              echo "--- 'actAs' test failed. Waiting 30 seconds for IAM to propagate... ---"
-              sleep 30
-            else
-              echo "--- 'actAs' test failed on all 3 attempts. ---"
-              exit 1
-            fi
-          done
-
       - name: "Deploy Dashboard to Cloud Run"
         run: |
           gcloud run deploy ${{ env.DASHBOARD_SERVICE_NAME }} \

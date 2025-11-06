@@ -54,7 +54,17 @@ const apiProxy = createProxyMiddleware({
   onError: (err, req, res) => {
     console.error('[Proxy] Connection Error:', err.message);
     res.status(502).send('Proxy connection error');
+  },
+  onProxyRes: (proxyRes, req, res) => {
+  console.log(`[Proxy] Response status: ${proxyRes.statusCode}`);
+  if (proxyRes.statusCode === 403) {
+    let body = '';
+    proxyRes.on('data', (chunk) => body += chunk);
+    proxyRes.on('end', () => {
+      console.error('[Proxy] 403 Response body:', body);
+    });
   }
+}
 });
 
 // --- 3. App Routing ---
