@@ -43,6 +43,7 @@ console.log(`[Init] Setting up proxy for target: ${targetApiUrl}`);
 const apiProxy = createProxyMiddleware({
   target: targetApiUrl,
   changeOrigin: true,
+  logLevel: 'debug',
   pathRewrite: {
     '^/api': '',
   },
@@ -50,26 +51,26 @@ const apiProxy = createProxyMiddleware({
   // --- THIS IS THE KEY ---
   // This onProxyReq function has "loud" error handling.
   // It is impossible for it to fail silently.
-  onProxyReq: async (proxyReq, req, res) => {
-    
-    // --- THIS IS THE NEW TEST LOG ---
+  onProxyReq: (proxyReq, req, res) => {
     console.log('[Proxy] onProxyReq: Function has been triggered. Starting auth...');
-    // --- END NEW TEST LOG ---
 
-    try {
+    // This is a self-invoking function to use promises.
+    (async () => {
       console.log('[Auth] Attempting to get IdTokenClient...');
       if (!idTokenClient) {
         idTokenClient = await auth.getIdTokenClient(audienceApiUrl);
       }
       console.log('[Auth] Attempting to fetch IdToken...');
       const token = await idTokenClient.idTokenProvider.fetchIdToken();
+      
       if (!token) {
         throw new Error('Fetched an empty or null token.');
       }
+      
       console.log('[Auth] Token fetched successfully. Adding Authorization header.');
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
       console.log(`[Proxy] Forwarding authenticated request to: ${targetApiUrl}${req.path}`);
-    } catch (err) {
+    })().catch((err) => {
       // If auth fails, we will see this in the logs.
       console.error('==================================================');
       console.error('[Proxy] CRITICAL AUTH FAILURE:');
@@ -77,9 +78,8 @@ const apiProxy = createProxyMiddleware({
       console.error(`[Proxy] Full Error:`, err);
       console.error('==================================================');
       
-      // This STOPS the unauthenticated proxy request from happening.
       res.status(500).send(`[Proxy Auth Failure] ${err.message}`);
-    }
+    });
   },
   onError: (err, req, res) => {
     console.error('[Proxy] Connection Error:', err.message);
