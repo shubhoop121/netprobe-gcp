@@ -1,4 +1,4 @@
-// apps/dashboard/server.js (FINAL, with TOKEN DEBUGGING)
+// apps/dashboard/server.js (FINAL, with AUDIENCE FIX)
 import express from 'express';
 import path from 'path';
 import { GoogleAuth } from 'google-auth-library';
@@ -29,6 +29,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// Check that environment variables are set
 if (!targetApiUrl || !audienceApiUrl) {
   console.error('CRITICAL: API_TARGET_URL or API_AUDIENCE_URL env vars not set. Shutting down.');
   process.exit(1);
@@ -38,7 +39,7 @@ if (!targetApiUrl || !audienceApiUrl) {
 const auth = new GoogleAuth();
 let idTokenClient;
 
-// --- 2. OUR NEW MANUAL PROXY HANDLER ---
+// --- 2. MANUAL PROXY HANDLER ---
 console.log('[Init] Registering /api route handler');
 app.use('/api/*', async (req, res) => {
   console.log(`[Proxy] Handler triggered for: ${req.originalUrl}`);
@@ -50,34 +51,28 @@ app.use('/api/*', async (req, res) => {
       idTokenClient = await auth.getIdTokenClient(audienceApiUrl);
     }
     console.log('[Auth] Attempting to fetch IdToken...');
-    const token = await idTokenClient.idTokenProvider.fetchIdToken();
+    
+    // --- THIS IS THE FIX ---
+    // We MUST pass the audience URL to the fetchIdToken() call.
+    const token = await idTokenClient.idTokenProvider.fetchIdToken(audienceApiUrl);
+    // --- END OF FIX ---
+
     if (!token) {
       throw new Error('Fetched an empty or null token.');
     }
-    
-    // --- THIS IS YOUR FRIEND'S DEBUG BLOCK ---
     console.log('[Auth] Token fetched successfully.');
-    console.log('[Auth] Token length:', token.length);
-    console.log('[Auth] Token first 50 chars:', token.substring(0, 50));
-    console.log('[Auth] Audience URL used:', audienceApiUrl);
-    
-    // Decode the JWT to see its claims
+
+    // (Optional: Decode and log the token payload)
     try {
       const parts = token.split('.');
       if (parts.length === 3) {
-        // Use 'base64url' encoding, which is correct for JWTs
         const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
         console.log('[Auth] Token payload:', JSON.stringify(payload, null, 2));
-      } else {
-        console.log('[Auth] Token is not a valid 3-part JWT.');
       }
-    } catch (e) {
-      console.log('[Auth] Could not decode token:', e.message);
-    }
-    // --- END OF DEBUG BLOCK ---
+    } catch (e) { console.log('[Auth] Could not decode token:', e.message); }
 
     // 2. Prepare the new request
-    const newPath = req.originalUrl.replace('/api', '');
+    const newPath = req.originalUrl.replace('/api', ''); // Rewrite /api/ping-db to /ping-db
     const newUrl = `${targetApiUrl}${newPath}`;
     
     console.log(`[Proxy] Forwarding authenticated request to: ${newUrl}`);
