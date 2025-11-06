@@ -43,8 +43,7 @@ resource "google_service_account" "dashboard_sa" {
 # -----------------------------------------------------------------
 # 2. GRANT PERMISSIONS TO THE API'S SA
 # -----------------------------------------------------------------
-# The API service needs to connect to the database and read secrets.
-
+# (Cloud SQL Client & Secret Accessor)
 resource "google_project_iam_member" "api_sa_secret_accessor" {
   project = var.project_id
   role    = "roles/secretmanager.secretAccessor"
@@ -60,7 +59,7 @@ resource "google_project_iam_member" "api_sa_sql_client" {
 # -----------------------------------------------------------------
 # 3. GRANT PERMISSIONS BETWEEN SERVICES (THE 403 FIX)
 # -----------------------------------------------------------------
-# This explicitly allows the Dashboard to invoke the API.
+# (Allow Dashboard to invoke API)
 resource "google_cloud_run_service_iam_member" "dashboard_to_api_invoker" {
   project  = google_cloud_run_service.api.project
   location = google_cloud_run_service.api.location
@@ -70,17 +69,12 @@ resource "google_cloud_run_service_iam_member" "dashboard_to_api_invoker" {
 }
 
 # -----------------------------------------------------------------
-# 4. GRANT "actAs" PERMISSION TO THE CI/CD PIPELINE (THE 'actAs' FIX)
+# 4. GRANT "actAs" & "TokenCreator" PERMISSIONS TO THE CI/CD PIPELINE
 # -----------------------------------------------------------------
-# This grants the 'actAs' permission to your GitHub Actions SA
-# at the PROJECT level, which is more robust and solves the
-# gcloud PERMISSION_DENIED error.
+# This allows 'github-actions-sa' to deploy "as" the new SAs
+# AND to generate tokens (which fixes our test step).
 
-resource "google_project_iam_member" "github_actas" {
-  project = var.project_id
-  role    = "roles/iam.serviceAccountUser"
-  member  = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
-}
+# --- 'actAs' (Service Account User) bindings ---
 
 resource "google_service_account_iam_member" "github_actas_api" {
   service_account_id = google_service_account.api_sa.name
@@ -94,12 +88,7 @@ resource "google_service_account_iam_member" "github_actas_dashboard" {
   member             = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
 }
 
-# -----------------------------------------------------------------
-# 5. GRANT "TokenCreator" ROLE TO THE CI/CD PIPELINE
-# -----------------------------------------------------------------
-# This explicitly grants the 'serviceAccountTokenCreator' role,
-# which is required for our 'gcloud auth print-identity-token'
-# test step to pass.
+# --- 'TokenCreator' bindings (THE MISSING PIECE) ---
 
 resource "google_service_account_iam_member" "github_token_creator_api" {
   service_account_id = google_service_account.api_sa.name
