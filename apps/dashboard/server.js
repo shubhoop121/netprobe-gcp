@@ -1,3 +1,4 @@
+// apps/dashboard/server.js (FINAL, with LOUD AUTH ERRORS)
 import express from 'express';
 import path from 'path';
 import { createProxyMiddleware } from 'http-proxy-middleware';
@@ -31,17 +32,9 @@ let idTokenClient;
 
 // --- 2. Authenticated Proxy ---
 console.log(`[Init] Setting up proxy for target: ${targetApiUrl}`);
-app.use('/api', (req, res, next) => {
-  console.log(`[Pre-Proxy] Request to /api${req.path}`);
-  console.log(`[Pre-Proxy] Full URL: ${req.url}`);
-  console.log(`[Pre-Proxy] Method: ${req.method}`);
-  next();
-});
-
 const apiProxy = createProxyMiddleware({
   target: targetApiUrl,
   changeOrigin: true,
-  logLevel: 'debug',
   pathRewrite: {
     '^/api': '',
   },
@@ -64,29 +57,24 @@ const apiProxy = createProxyMiddleware({
       console.log(`[Proxy] Forwarding authenticated request to: ${targetApiUrl}${req.path}`);
 
     } catch (err) {
+      // --- THIS IS THE FIX ---
+      // We will now log the FULL error and, most importantly,
+      // STOP the request from continuing.
       console.error('==================================================');
       console.error('[Proxy] CRITICAL AUTH FAILURE:');
       console.error(`[Proxy] Failed to get auth token: ${err.message}`);
       console.error(`[Proxy] Full Error:`, err);
       console.error('==================================================');
-
+      
+      // This STOPS the unauthenticated proxy request from happening.
+      // This will cause your browser to see the 500 error.
       res.status(500).send(`[Proxy Auth Failure] ${err.message}`);
     }
   },
   onError: (err, req, res) => {
     console.error('[Proxy] Connection Error:', err.message);
     res.status(502).send('Proxy connection error');
-  },
-  onProxyRes: (proxyRes, req, res) => {
-  console.log(`[Proxy] Response status: ${proxyRes.statusCode}`);
-  if (proxyRes.statusCode === 403) {
-    let body = '';
-    proxyRes.on('data', (chunk) => body += chunk);
-    proxyRes.on('end', () => {
-      console.error('[Proxy] 403 Response body:', body);
-    });
   }
-}
 });
 
 // --- 3. App Routing ---
