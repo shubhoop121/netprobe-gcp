@@ -1,4 +1,4 @@
-// apps/dashboard/server.js (FINAL, MANUAL PROXY, v2)
+// apps/dashboard/server.js (FINAL, with TOKEN DEBUGGING)
 import express from 'express';
 import path from 'path';
 import { GoogleAuth } from 'google-auth-library';
@@ -23,7 +23,7 @@ console.log(`[DEBUG] API_AUDIENCE_URL: ${audienceApiUrl}`);
 console.log('==================================================');
 
 // --- 0. Request Logger ---
-app.use(express.json()); // Add JSON body parser for POST requests
+app.use(express.json()); // Add JSON body parser
 app.use((req, res, next) => {
   console.log(`[Logger] Received: ${req.method} ${req.path}`);
   next();
@@ -54,7 +54,27 @@ app.use('/api/*', async (req, res) => {
     if (!token) {
       throw new Error('Fetched an empty or null token.');
     }
+    
+    // --- THIS IS YOUR FRIEND'S DEBUG BLOCK ---
     console.log('[Auth] Token fetched successfully.');
+    console.log('[Auth] Token length:', token.length);
+    console.log('[Auth] Token first 50 chars:', token.substring(0, 50));
+    console.log('[Auth] Audience URL used:', audienceApiUrl);
+    
+    // Decode the JWT to see its claims
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        // Use 'base64url' encoding, which is correct for JWTs
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+        console.log('[Auth] Token payload:', JSON.stringify(payload, null, 2));
+      } else {
+        console.log('[Auth] Token is not a valid 3-part JWT.');
+      }
+    } catch (e) {
+      console.log('[Auth] Could not decode token:', e.message);
+    }
+    // --- END OF DEBUG BLOCK ---
 
     // 2. Prepare the new request
     const newPath = req.originalUrl.replace('/api', '');
@@ -62,22 +82,17 @@ app.use('/api/*', async (req, res) => {
     
     console.log(`[Proxy] Forwarding authenticated request to: ${newUrl}`);
 
-    // --- THIS IS THE FIX ---
-    // We only pass the Content-Type header if it was
-    // provided by the original request.
     const headers = {
       'Authorization': `Bearer ${token}`,
     };
     if (req.header('Content-Type')) {
       headers['Content-Type'] = req.header('Content-Type');
     }
-    // --- END OF FIX ---
     
-    // 3. Make the proxied request using built-in fetch
+    // 3. Make the proxied request
     const apiResponse = await fetch(newUrl, {
       method: req.method,
       headers: headers,
-      // Pass the body only if it's not a GET request
       body: (req.method !== 'GET' && req.body) ? JSON.stringify(req.body) : undefined,
     });
 
