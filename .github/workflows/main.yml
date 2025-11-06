@@ -109,7 +109,7 @@ jobs:
         run: |
           DB_IP=$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip)
           echo "$DB_IP" | gcloud secrets versions add db-private-ip-live --data-file=-
-          
+
   # ======================================================================================
   # JOB 3: DEPLOY API (Runs on Merge to main, after Infra)
   # ======================================================================================
@@ -156,7 +156,7 @@ jobs:
           for i in 1 2 3; do
             echo "--- 'actAs' test attempt $i of 3 ---"
             # This is the correct isolated test command:
-            gcloud auth print-identity-token --impersonate-service-account=sa-netprobe-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            gcloud auth print-identity-token --impersonate-service-account=netprobe-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
               && echo "--- 'actAs' permission confirmed on attempt $i ---" \
               && break
             
@@ -179,7 +179,7 @@ jobs:
             --vpc-connector="netprobe-vpc-connector" \
             --vpc-egress=private-ranges-only \
             --ingress=internal \
-            --service-account=sa-netprobe-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --service-account=netprobe-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-env-vars="DB_HOST=${{ env.DB_HOST }}" \
             --no-allow-unauthenticated
           
