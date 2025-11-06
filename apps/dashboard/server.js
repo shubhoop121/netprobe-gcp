@@ -15,6 +15,13 @@ const staticDir = path.join(__dirname, 'dist');
 const targetApiUrl = process.env.API_TARGET_URL;
 const audienceApiUrl = process.env.API_AUDIENCE_URL;
 
+console.log('==================================================');
+console.log('[DEBUG] Environment Variables:');
+console.log(`[DEBUG] PORT: ${port}`);
+console.log(`[DEBUG] API_TARGET_URL: ${targetApiUrl}`);
+console.log(`[DEBUG] API_AUDIENCE_URL: ${audienceApiUrl}`);
+console.log('==================================================');
+
 // --- 0. Request Logger ---
 app.use((req, res, next) => {
   console.log(`[Logger] Received: ${req.method} ${req.path}`);
