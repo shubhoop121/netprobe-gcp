@@ -93,3 +93,22 @@ resource "google_service_account_iam_member" "github_actas_dashboard" {
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
 }
+
+# -----------------------------------------------------------------
+# 5. GRANT "TokenCreator" ROLE TO THE CI/CD PIPELINE
+# -----------------------------------------------------------------
+# This explicitly grants the 'serviceAccountTokenCreator' role,
+# which is required for our 'gcloud auth print-identity-token'
+# test step to pass.
+
+resource "google_service_account_iam_member" "github_token_creator_api" {
+  service_account_id = google_service_account.api_sa.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
+}
+
+resource "google_service_account_iam_member" "github_token_creator_dashboard" {
+  service_account_id = google_service_account.dashboard_sa.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
+}
