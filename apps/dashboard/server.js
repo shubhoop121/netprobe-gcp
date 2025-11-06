@@ -1,4 +1,4 @@
-// apps/dashboard/server.js (FINAL, SIMPLE, NO DNS HACK)
+// apps/dashboard/server.js (FINAL, "EVEN LOUDER" VERSION)
 import express from 'express';
 import path from 'path';
 import { createProxyMiddleware } from 'http-proxy-middleware';
@@ -42,12 +42,20 @@ let idTokenClient;
 console.log(`[Init] Setting up proxy for target: ${targetApiUrl}`);
 const apiProxy = createProxyMiddleware({
   target: targetApiUrl,
-  changeOrigin: true,      // Required
-  // NO 'agent' key. We are using the default Node.js agent.
+  changeOrigin: true,
   pathRewrite: {
     '^/api': '',
   },
+
+  // --- THIS IS THE KEY ---
+  // This onProxyReq function has "loud" error handling.
+  // It is impossible for it to fail silently.
   onProxyReq: async (proxyReq, req, res) => {
+    
+    // --- THIS IS THE NEW TEST LOG ---
+    console.log('[Proxy] onProxyReq: Function has been triggered. Starting auth...');
+    // --- END NEW TEST LOG ---
+
     try {
       console.log('[Auth] Attempting to get IdTokenClient...');
       if (!idTokenClient) {
@@ -62,11 +70,14 @@ const apiProxy = createProxyMiddleware({
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
       console.log(`[Proxy] Forwarding authenticated request to: ${targetApiUrl}${req.path}`);
     } catch (err) {
+      // If auth fails, we will see this in the logs.
       console.error('==================================================');
       console.error('[Proxy] CRITICAL AUTH FAILURE:');
       console.error(`[Proxy] Failed to get auth token: ${err.message}`);
       console.error(`[Proxy] Full Error:`, err);
       console.error('==================================================');
+      
+      // This STOPS the unauthenticated proxy request from happening.
       res.status(500).send(`[Proxy Auth Failure] ${err.message}`);
     }
   },
