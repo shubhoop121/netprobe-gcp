@@ -1,4 +1,3 @@
-// apps/dashboard/server.js (FINAL, NO DNS HACK)
 import express from 'express';
 import path from 'path';
 import { createProxyMiddleware } from 'http-proxy-middleware';
@@ -32,23 +31,46 @@ let idTokenClient;
 
 // --- 2. Authenticated Proxy ---
 console.log(`[Init] Setting up proxy for target: ${targetApiUrl}`);
+app.use('/api', (req, res, next) => {
+  console.log(`[Pre-Proxy] Request to /api${req.path}`);
+  console.log(`[Pre-Proxy] Full URL: ${req.url}`);
+  console.log(`[Pre-Proxy] Method: ${req.method}`);
+  next();
+});
+
 const apiProxy = createProxyMiddleware({
-  target: targetApiUrl,    // Use public URL (e.g., https://netprobe-api-...)
-  changeOrigin: true,      // Required
+  target: targetApiUrl,
+  changeOrigin: true,
+  logLevel: 'debug',
   pathRewrite: {
-    '^/api': '', // Rewrites /api/ping-db to /ping-db
+    '^/api': '',
   },
   onProxyReq: async (proxyReq, req, res) => {
     try {
+      console.log('[Auth] Attempting to get IdTokenClient...');
       if (!idTokenClient) {
         idTokenClient = await auth.getIdTokenClient(audienceApiUrl);
       }
+      
+      console.log('[Auth] Attempting to fetch IdToken...');
       const token = await idTokenClient.idTokenProvider.fetchIdToken();
+      
+      if (!token) {
+        throw new Error('Fetched an empty or null token.');
+      }
+      
+      console.log('[Auth] Token fetched successfully. Adding Authorization header.');
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
       console.log(`[Proxy] Forwarding authenticated request to: ${targetApiUrl}${req.path}`);
+
     } catch (err) {
-      console.error('[Proxy] Auth Error:', err.message);
-      res.status(500).send('Failed to authenticate proxy request');
+      console.error('==================================================');
+      console.error('[Proxy] CRITICAL AUTH FAILURE:');
+      console.error(`[Proxy] Failed to get auth token: ${err.message}`);
+      console.error(`[Proxy] Full Error:`, err);
+      console.error('==================================================');
+
+      res.status(500).send(`[Proxy Auth Failure] ${err.message}`);
     }
   },
   onError: (err, req, res) => {
