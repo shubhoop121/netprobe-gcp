@@ -1,11 +1,9 @@
-// apps/dashboard/server.js (FINAL, with PROXY-LEVEL DEBUGGING)
+// apps/dashboard/server.js (FINAL, SIMPLE, NO DNS HACK)
 import express from 'express';
 import path from 'path';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { GoogleAuth } from 'google-auth-library';
 import { fileURLToPath } from 'url';
-import https from 'https';
-import { Resolver } from 'node:dns/promises';
 
 // --- Configuration ---
 const app = express();
@@ -17,7 +15,7 @@ const staticDir = path.join(__dirname, 'dist');
 const targetApiUrl = process.env.API_TARGET_URL;
 const audienceApiUrl = process.env.API_AUDIENCE_URL;
 
-// --- DEBUG BLOCK (This is good, keep it) ---
+// --- DEBUG BLOCK ---
 console.log('==================================================');
 console.log('[DEBUG] Environment Variables:');
 console.log(`[DEBUG] PORT: ${port}`);
@@ -40,53 +38,15 @@ if (!targetApiUrl || !audienceApiUrl) {
 const auth = new GoogleAuth();
 let idTokenClient;
 
-// --- 2. CUSTOM DNS AGENT ---
-console.log('[DNS] Initializing Google DNS Resolver (169.254.169.254)...');
-const resolver = new Resolver();
-resolver.setServers(['169.254.169.254']);
-
-const googleDnsAgent = new https.Agent({
-  lookup: async (hostname, options, callback) => {
-    console.log(`[DNS] Attempting to resolve: ${hostname}`);
-    try {
-      const addresses = await resolver.resolve4(hostname);
-      if (!addresses || addresses.length === 0) {
-        console.error(`[DNS] Error: No IP found for ${hostname}`);
-        return callback(new Error(`No IP found for ${hostname}`), null, null);
-      }
-      const ip = addresses[0];
-      console.log(`[DNS] Resolved ${hostname} to ${ip}`);
-      callback(null, ip, 4);
-    } catch (err) {
-      console.error(`[DNS] Error: ${err.message}`);
-      callback(err, null, null);
-    }
-  },
-});
-
-// --- 3. Authenticated Proxy ---
+// --- 2. Authenticated Proxy ---
 console.log(`[Init] Setting up proxy for target: ${targetApiUrl}`);
 const apiProxy = createProxyMiddleware({
   target: targetApiUrl,
-  agent: googleDnsAgent,
-  changeOrigin: true,
+  changeOrigin: true,      // Required
+  // NO 'agent' key. We are using the default Node.js agent.
   pathRewrite: {
     '^/api': '',
   },
-  
-  // --- THIS IS THE NEW FIX ---
-  // Force the proxy to log its internal state.
-  logLevel: 'debug',
-  logProvider: (provider) => {
-    return {
-      log: (msg) => console.log(`[PROXY_DEBUG] ${msg}`),
-      info: (msg) => console.info(`[PROXY_INFO] ${msg}`),
-      warn: (msg) => console.warn(`[PROXY_WARN] ${msg}`),
-      error: (msg) => console.error(`[PROXY_ERROR] ${msg}`),
-    };
-  },
-  // --- END OF NEW FIX ---
-
   onProxyReq: async (proxyReq, req, res) => {
     try {
       console.log('[Auth] Attempting to get IdTokenClient...');
@@ -116,11 +76,10 @@ const apiProxy = createProxyMiddleware({
   }
 });
 
-// --- 4. App Routing ---
+// --- 3. App Routing ---
 console.log('[Init] Registering /api route');
 app.use('/api', apiProxy);
 
-// ... (rest of the file: static route, fallback route, app.listen)
 console.log('[Init] Registering static file route');
 app.use(express.static(staticDir));
 
@@ -136,6 +95,7 @@ app.get('*', (req, res) => {
   });
 });
 
+// --- 4. Start Server ---
 app.listen(port, () => {
   console.log(`[Init] Server listening on port ${port}`);
   console.log(`[Init] Serving static files from: ${staticDir}`);
