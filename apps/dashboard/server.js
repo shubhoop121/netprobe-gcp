@@ -43,7 +43,6 @@ console.log(`[Init] Setting up proxy for target: ${targetApiUrl}`);
 const apiProxy = createProxyMiddleware({
   target: targetApiUrl,
   changeOrigin: true,
-  logLevel: 'debug',
   pathRewrite: {
     '^/api': '',
   },
