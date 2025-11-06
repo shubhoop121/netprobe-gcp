@@ -101,3 +101,11 @@ resource "google_service_account_iam_member" "github_token_creator_dashboard" {
   role               = "roles/iam.serviceAccountTokenCreator"
   member             = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
 }
+
+resource "google_service_account_iam_member" "dashboard_sa_token_creator" {
+  service_account_id = google_service_account.api_sa.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  
+  # The member is the dashboard SA, which is running the proxy
+  member             = google_service_account.dashboard_sa.member
+}
