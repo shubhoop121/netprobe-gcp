@@ -1,0 +1,94 @@
+/* ===== Dashboard Layout ===== */
+
+.dashboard-container {
+  min-height: 100vh;
+  background-color: #f3f4f6;
+  padding: 30px 40px;
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ===== Header ===== */
+.dashboard-header {
+  background-color: #d1d5db;
+  border: 2px solid #111827;
+  border-radius: 8px;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.dashboard-title {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #111827;
+}
+
+.dashboard-status {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #111827;
+  font-weight: 500;
+}
+
+.status-dot {
+  width: 14px;
+  height: 14px;
+  background-color: #10b981; /* green indicator */
+  border-radius: 50%;
+  border: 2px solid #111827;
+}
+
+.user-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #111827;
+}
+
+.user-dot {
+  width: 14px;
+  height: 14px;
+  background-color: #9ca3af;
+  border-radius: 50%;
+  border: 2px solid #111827;
+}
+
+.logout-btn {
+  background-color: #111827;
+  color: white;
+  font-weight: 600;
+  border: 2px solid #111827;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.logout-btn:hover {
+  background-color: #1f2937;
+}
+
+/* ===== Dashboard Grid ===== */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 24px;
+}
+
+/* ===== Dashboard Cards ===== */
+.dashboard-card {
+  background-color: #ffffff;
+  border: 2px solid #111827;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 3px 6px rgba(17, 24, 39, 0.1);
+}

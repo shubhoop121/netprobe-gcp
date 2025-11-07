@@ -1,0 +1,141 @@
+/* ===== Login Page Styles ===== */
+
+.login-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: #e5e7eb;
+  padding: 20px;
+}
+
+.login-card {
+  background-color: #ffffff;
+  border: 2px solid #111827;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(17, 24, 39, 0.15);
+  width: 100%;
+  max-width: 400px;
+  overflow: hidden;
+}
+
+.login-header {
+  background-color: #d1d5db;
+  border-bottom: 2px solid #111827;
+  padding: 25px 20px;
+  text-align: center;
+}
+
+.login-header h1 {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.login-header p {
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.login-form {
+  padding: 30px 28px;
+}
+
+.login-label {
+  display: block;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.input-group {
+  position: relative;
+  margin-bottom: 18px;
+}
+
+.input-group svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+}
+
+.login-input {
+  width: 100%;
+  border: 2px solid #111827;
+  border-radius: 6px;
+  padding: 10px 12px 10px 40px;
+  font-size: 0.95rem;
+  color: #111827;
+  background-color: #fff;
+}
+
+.login-input:focus {
+  outline: none;
+  background-color: #f9fafb;
+}
+
+.error-box {
+  background-color: #fee2e2;
+  border: 2px solid #dc2626;
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #dc2626;
+  font-size: 0.85rem;
+  margin-top: 10px;
+}
+
+.signin-btn {
+  width: 100%;
+  background-color: #111827;
+  color: white;
+  font-weight: 700;
+  border: 2px solid #111827;
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 10px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.signin-btn:hover {
+  background-color: #1f2937;
+}
+
+.divider {
+  border-top: 1.5px solid #d1d5db;
+  margin: 20px 0;
+}
+
+.switch-section {
+  text-align: center;
+  margin-top: 10px;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.switch-btn {
+  width: 100%;
+  background-color: #e5e7eb;
+  color: #111827;
+  font-weight: 700;
+  border: 2px solid #111827;
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.switch-btn:hover {
+  background-color: #d1d5db;
+}

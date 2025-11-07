@@ -1,34 +1,73 @@
-import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import Login from "./page/Login";
+import Dashboard from "./page/Dashboard";
 
-function App() {
-  const [dbStatus, setDbStatus] = useState('Checking...');
+// Main App Component
+export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
+  // Check login state from localStorage when app loads
   useEffect(() => {
-    fetch('/api/ping-db')
-      .then(res => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then(data => {
-        setDbStatus(data.message || data.error || 'Connected, but got bad data');
-      })
-      .catch((err) => {
-        console.error("Fetch error:", err);
-        setDbStatus(`Failed to connect to API: ${err.message}`);
-      });
-  }, []); // The empty array ensures this runs only once on component mount
+    const token = localStorage.getItem("authToken");
+    setIsLoggedIn(!!token);
+  }, []);
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'Arial' }}>
-      <h1>NetProbe Dashboard</h1>
-      <p>This is the starting point for your application.</p>
-      <hr />
-      {/* This will now show the real status */}
-      <h2>Database Status: {dbStatus}</h2>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        {/* Login Page */}
+        <Route
+          path="/"
+          element={
+            isLoggedIn ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <LoginWrapper onLoginSuccess={() => setIsLoggedIn(true)} />
+            )
+          }
+        />
+
+        {/* Dashboard Page */}
+        <Route
+          path="/dashboard"
+          element={
+            isLoggedIn ? (
+              <DashboardWrapper onLogout={() => setIsLoggedIn(false)} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+
+        {/* Catch-all redirect */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
-export default App;
+// ✅ Wrapper for Login so we can use navigation inside
+function LoginWrapper({ onLoginSuccess }: { onLoginSuccess: () => void }) {
+  const navigate = useNavigate();
+
+  const handleLoginSuccess = () => {
+    onLoginSuccess();
+    navigate("/dashboard"); // redirect after login
+  };
+
+  return <Login onLoginSuccess={handleLoginSuccess} />;
+}
+
+// ✅ Wrapper for Dashboard to handle logout and navigation
+function DashboardWrapper({ onLogout }: { onLogout: () => void }) {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem("authToken");
+    onLogout();
+    navigate("/");
+  };
+
+  return <Dashboard onLogout={handleLogout} />;
+}
