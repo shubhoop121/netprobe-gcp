@@ -52,11 +52,7 @@ app.use('/api', async (req, res) => {
     }
     console.log('[Auth] Attempting to fetch IdToken...');
     
-    // --- THIS IS THE FIX ---
-    // We MUST pass the audience URL to the fetchIdToken() call.
     const token = await idTokenClient.idTokenProvider.fetchIdToken(audienceApiUrl);
-    // --- END OF FIX ---
-
     if (!token) {
       throw new Error('Fetched an empty or null token.');
     }
