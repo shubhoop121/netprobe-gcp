@@ -50,7 +50,6 @@ jobs:
         env:
           TF_VAR_db_password: "dummy-password-for-plan"
         run: terraform plan -input=false -var="nva_instance_count=1" -var="branch_name=${{ github.head_ref }}" -var="app_version=${{ github.event.pull_request.head.sha }}" -var-file="terraform.tfvars"
-
       - name: "Set up Cloud SDK"
         uses: "google-github-actions/setup-gcloud@v2"
       - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
