@@ -163,7 +163,7 @@ jobs:
           echo "api_url=$API_URL" >> $GITHUB_OUTPUT
 
   # ======================================================================================
-  # JOB 4: DEPLOY DASHBOARD (Runs on Merge, after API is deployed)
+  # JOB 4: DEPLOY DASHBOARD (Runs on Merge, after API deployment)
   # ======================================================================================
   deploy-dashboard:
     name: "Build and Deploy Dashboard"
@@ -191,16 +191,12 @@ jobs:
           
       - name: "Deploy Dashboard to Cloud Run"
         run: |
-          API_URL_WITH_SLASH="${{ needs.deploy-api.outputs.api_url }}"
-          API_URL=${API_URL_WITH_SLASH%/}
-          
           gcloud run deploy ${{ env.DASHBOARD_SERVICE_NAME }} \
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} \
             --region=${{ env.REGION }} \
-            --allow-unauthenticated \
-            --set-env-vars="API_SERVICE_URL=$API_URL"
+            --allow-unauthenticated
+          
           gcloud run services update-traffic ${{ env.DASHBOARD_SERVICE_NAME }} --region=${{ env.REGION }} --to-latest
-
   # =====================================================================================
   # JOB 5: VALIDATE DEPLOYMENT (Runs on Merge, after Apps are deployed)
   # =====================================================================================

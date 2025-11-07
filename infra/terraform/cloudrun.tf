@@ -43,20 +43,18 @@ resource "google_cloud_run_v2_service" "api" {
   project  = var.project_id
   location = var.region
   
-  # This controls who can access it.
-  ingress = "INGRESS_TRAFFIC_ALL"
-  
+  ingress = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
   template {
     containers {
       image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
     }
     
-    # The 'vpc_access' block correctly defines egress for VPC traffic
     vpc_access {
       connector = google_vpc_access_connector.main.id
-      # This setting routes all outbound traffic through the VPC
-      egress    = "PRIVATE_RANGES_ONLY" 
+      egress    = "PRIVATE_RANGES_ONLY"
     }
+
+    # Explicitly tell the API to run as the Compute Engine default SA
     service_account = data.google_compute_default_service_account.default.email
   }
 
@@ -74,6 +72,10 @@ resource "google_cloud_run_v2_service" "dashboard" {
   template {
     containers {
       image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
+    }
+    vpc_access {
+      connector = google_vpc_access_connector.main.id
+      egress    = "ALL_TRAFFIC"
     }
     service_account = data.google_compute_default_service_account.default.email
   }
