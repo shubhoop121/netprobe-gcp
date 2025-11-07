@@ -95,10 +95,13 @@ jobs:
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: terraform apply -auto-approve -var="nva_instance_count=1" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
-      
+
       - name: "Set up Cloud SDK"
         uses: 'google-github-actions/setup-gcloud@v2'
-      
+      - name: "Update Live DB IP in Secret Manager"
+        run: |
+          DB_IP=$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip)
+          echo "$DB_IP" | gcloud secrets versions add db-private-ip-live --data-file=-
       - name: "Wait for NVA Rolling Update to Complete"
         run: |
           echo "--- Waiting for NVA Managed Instance Group to become stable... ---"
@@ -118,11 +121,6 @@ jobs:
           echo "test_workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_OUTPUT
           echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
           echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
-          
-      - name: "Update Live DB IP in Secret Manager"
-        run: |
-          DB_IP=$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip)
-          echo "$DB_IP" | gcloud secrets versions add db-private-ip-live --data-file=-
 
   # ======================================================================================
   # JOB 3: DEPLOY API (Runs on Merge to main, after Infra)
