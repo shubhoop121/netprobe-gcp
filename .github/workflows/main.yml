@@ -268,7 +268,6 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          
       - uses: hashicorp/setup-terraform@v3
       - name: "Terraform Init" 
         working-directory: ./infra/terraform
