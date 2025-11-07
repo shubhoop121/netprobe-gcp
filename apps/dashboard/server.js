@@ -41,7 +41,7 @@ let idTokenClient;
 
 // --- 2. MANUAL PROXY HANDLER ---
 console.log('[Init] Registering /api route handler');
-app.use('/api/*', async (req, res) => {
+app.use('/api', async (req, res) => {
   console.log(`[Proxy] Handler triggered for: ${req.originalUrl}`);
 
   try {

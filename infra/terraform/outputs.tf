@@ -27,3 +27,7 @@ output "dashboard_service_url" {
   description = "The public URL of the netprobe-dashboard service"
   value       = google_cloud_run_service.dashboard.status[0].url
 }
+
+output "load_balancer_ip" {
+  value = google_compute_global_address.frontend_ip.address
+}
