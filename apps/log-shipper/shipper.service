@@ -5,7 +5,7 @@ After=network.target zeek.service
 
 [Service]
 # These environment variables will be dynamically populated by the NVA's startup script
-Environment="DB_HOST="
+# --- CHANGE: Removed DB_HOST ---
 Environment="DB_NAME="
 Environment="DB_USER=netprobe_user"
 Environment="DB_PASSWORD="

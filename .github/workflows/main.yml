@@ -1,5 +1,4 @@
 name: "NetProbe Main CI/CD Pipeline"
-
 on:
   push:
     branches: [ main ]
@@ -27,6 +26,13 @@ jobs:
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
+
+      - name: "Cache Terraform providers"
+        uses: actions/cache@v4
+        with:
+          path: .terraform
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**.tf') }}
+          
       - name: "Authenticate to Google Cloud"
         uses: "google-github-actions/auth@v2"
         with:
@@ -43,7 +49,6 @@ jobs:
         env:
           TF_VAR_db_password: "dummy-password-for-plan"
         run: terraform plan -input=false -var="nva_instance_count=1" -var="branch_name=${{ github.head_ref }}" -var="app_version=${{ github.event.pull_request.head.sha }}" -var-file="terraform.tfvars"
-
       - name: "Set up Cloud SDK"
         uses: "google-github-actions/setup-gcloud@v2"
       - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
@@ -68,6 +73,13 @@ jobs:
       db_connection_name: ${{ steps.tf-outputs.outputs.db_connection_name }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: "Cache Terraform providers"
+        uses: actions/cache@v4
+        with:
+          path: .terraform
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**.tf') }}
+
       - uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -81,10 +93,13 @@ jobs:
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
         run: terraform apply -auto-approve -var="nva_instance_count=1" -var="branch_name=main" -var="app_version=${{ github.sha }}" -var-file="terraform.tfvars"
-      
+
       - name: "Set up Cloud SDK"
         uses: 'google-github-actions/setup-gcloud@v2'
-      
+      - name: "Update Live DB IP in Secret Manager"
+        run: |
+          DB_IP=$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip)
+          echo "$DB_IP" | gcloud secrets versions add db-private-ip-live --data-file=-
       - name: "Wait for NVA Rolling Update to Complete"
         run: |
           echo "--- Waiting for NVA Managed Instance Group to become stable... ---"
@@ -94,6 +109,7 @@ jobs:
           echo "--- NVA cluster is stable. Proceeding. ---"
       
       - name: "Trigger Cloud Build for Schema Creation"
+        if: "!contains(github.event.head_commit.message, '[skip-builds]')"
         run: 'gcloud builds submit --config=cloudbuild-schema.yaml --project=${{ env.PROJECT_ID }} --region=${{ env.REGION }} --quiet'
 
       - name: "Get Terraform Outputs for Validation Jobs"
@@ -103,11 +119,6 @@ jobs:
           echo "test_workload_vm_name=$(terraform output -raw test_workload_vm_name)" >> $GITHUB_OUTPUT
           echo "workload_vm_zone=$(terraform output -raw test_workload_vm_zone)" >> $GITHUB_OUTPUT
           echo "db_connection_name=$(terraform output -raw db_connection_name)" >> $GITHUB_OUTPUT
-          
-      - name: "Update Live DB IP in Secret Manager"
-        run: |
-          DB_IP=$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip)
-          echo "$DB_IP" | gcloud secrets versions add db-private-ip-live --data-file=-
 
   # ======================================================================================
   # JOB 3: DEPLOY API (Runs on Merge to main, after Infra)
@@ -124,7 +135,16 @@ jobs:
       api_url: ${{ steps.deploy_api.outputs.api_url }}
     steps:
       - uses: actions/checkout@v4
-      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}-${{ hashFiles(format('apps/{0}/Dockerfile', env.API_SERVICE_NAME || env.DASHBOARD_SERVICE_NAME)) }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
       - name: "Authenticate to Google Cloud"
         uses: "google-github-actions/auth@v2"
         with:
@@ -134,10 +154,14 @@ jobs:
       - uses: "google-github-actions/setup-gcloud@v2"
       - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
-      - name: "Build and Push API Image"
-        run: |
-          docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }} ./apps/api
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }}
+      - name: Build and Push API Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/api
+          push: true
+          tags: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
           
       - name: "Fetch Live Database IP"
         id: get_db_ip
@@ -156,11 +180,15 @@ jobs:
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }} \
             --region=${{ env.REGION }} \
             --vpc-connector="netprobe-vpc-connector" \
+            --vpc-egress=private-ranges-only \
+            --ingress=internal \
+            --service-account=netprobe-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-env-vars="DB_HOST=${{ env.DB_HOST }}" \
-            --allow-unauthenticated
+            --no-allow-unauthenticated
           
           API_URL=$(gcloud run services describe ${{ env.API_SERVICE_NAME }} --region=${{ env.REGION }} --format="value(status.url)")
           echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+          echo "--- API URL: $API_URL ---"
 
   # ======================================================================================
   # JOB 4: DEPLOY DASHBOARD (Runs on Merge, after API deployment)
@@ -175,7 +203,17 @@ jobs:
       id-token: "write"
     steps:
       - uses: actions/checkout@v4
-      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}-${{ hashFiles(format('apps/{0}/Dockerfile', env.API_SERVICE_NAME || env.DASHBOARD_SERVICE_NAME)) }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
       - name: "Authenticate to Google Cloud"
         uses: "google-github-actions/auth@v2"
         with:
@@ -184,19 +222,27 @@ jobs:
           
       - uses: "google-github-actions/setup-gcloud@v2"
       - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
-      - name: "Build and Push Dashboard Image"
-        run: |
-          docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} ./apps/dashboard
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }}
-          
+      
+      - name: Build and Push Dashboard Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/dashboard
+          push: true
+          tags: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+      
       - name: "Deploy Dashboard to Cloud Run"
         run: |
           gcloud run deploy ${{ env.DASHBOARD_SERVICE_NAME }} \
             --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} \
             --region=${{ env.REGION }} \
+            --vpc-connector="netprobe-vpc-connector" \
+            --vpc-egress=all-traffic \
+            --service-account=netprobe-dashboard@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --set-env-vars="^::^API_TARGET_URL=${{ needs.deploy-api.outputs.api_url }}::API_AUDIENCE_URL=${{ needs.deploy-api.outputs.api_url }}" \
             --allow-unauthenticated
-          
-          gcloud run services update-traffic ${{ env.DASHBOARD_SERVICE_NAME }} --region=${{ env.REGION }} --to-latest
+
   # =====================================================================================
   # JOB 5: VALIDATE DEPLOYMENT (Runs on Merge, after Apps are deployed)
   # =====================================================================================
@@ -210,18 +256,22 @@ jobs:
       id-token: "write"
     steps:
       - uses: actions/checkout@v4
-      
+      - name: "Cache Terraform providers"
+        uses: actions/cache@v4
+        with:
+          path: .terraform
+          key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**.tf') }}
       - name: "Authenticate to Google Cloud"
         uses: "google-github-actions/auth@v2"
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          
       - uses: hashicorp/setup-terraform@v3
       - name: "Terraform Init" 
         working-directory: ./infra/terraform
         run: terraform init
       - name: "Wait for NVA startup scripts"
+        if: "!contains(github.event.head_commit.message, '[skip-builds]')"
         run: sleep 150
       
       - name: "Set up Cloud SDK"
@@ -250,6 +300,7 @@ jobs:
             --command="curl -v https://google.com"
 
       - name: "Trigger Cloud Build for Validation"
+        if: "!contains(github.event.head_commit.message, '[skip-builds]')"
         run: |
           gcloud builds submit --config=cloudbuild-validate.yaml --project=${{ env.PROJECT_ID }} --region=${{ env.REGION }} --quiet
 

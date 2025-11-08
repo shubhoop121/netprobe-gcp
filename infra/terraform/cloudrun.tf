@@ -37,68 +37,91 @@ resource "google_vpc_access_connector" "main" {
   depends_on    = [google_project_service.vpcaccess]
 }
 
-# 4. Create the Cloud Run service for the API
-resource "google_cloud_run_v2_service" "api" {
+# 4. Create the Cloud Run service for the API (v1 resource)
+resource "google_cloud_run_service" "api" {
   name     = "netprobe-api"
   project  = var.project_id
   location = var.region
-  
-  ingress = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
-  template {
-    containers {
-      image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
-    }
-    
-    vpc_access {
-      connector = google_vpc_access_connector.main.id
-      egress    = "PRIVATE_RANGES_ONLY"
-    }
 
-    # Explicitly tell the API to run as the Compute Engine default SA
-    service_account = data.google_compute_default_service_account.default.email
+  # --- FIX 1 ---
+  # 'ingress' annotation goes here, at the Service level
+  metadata {
+    annotations = {
+      "run.googleapis.com/ingress" = "internal"
+    }
   }
 
-  depends_on = [google_vpc_access_connector.main]
+  template {
+    # --- FIX 2 ---
+    # VPC annotations go here, on the Revision template
+    metadata {
+      annotations = {
+        "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.main.id
+        "run.googleapis.com/vpc-access-egress"    = "private-ranges-only"
+      }
+    }
+    spec {
+      containers {
+        image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
+      }
+      service_account_name = google_service_account.api_sa.email
+    }
+  }
+
+  traffic {
+    percent         = 100
+    latest_revision = true
+  }
+
+  autogenerate_revision_name = true
+  depends_on                 = [google_vpc_access_connector.main]
 }
 
-# 5. Create the Cloud Run service for the Dashboard
-resource "google_cloud_run_v2_service" "dashboard" {
+# 5. Create the Cloud Run service for the Dashboard (v1 resource)
+resource "google_cloud_run_service" "dashboard" {
   name     = "netprobe-dashboard"
   project  = var.project_id
   location = var.region
 
-  ingress = "INGRESS_TRAFFIC_ALL"
-
-  template {
-    containers {
-      image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
+  # --- FIX 1 ---
+  # 'ingress' annotation goes here, at the Service level
+  metadata {
+    annotations = {
+      "run.googleapis.com/ingress" = "all"
     }
-    vpc_access {
-      connector = google_vpc_access_connector.main.id
-      egress    = "ALL_TRAFFIC"
-    }
-    service_account = data.google_compute_default_service_account.default.email
   }
 
-  depends_on = [google_cloud_run_v2_service.api]
+  template {
+    # --- FIX 2 ---
+    # VPC annotations go here, on the Revision template
+    metadata {
+      annotations = {
+        "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.main.id
+        "run.googleapis.com/vpc-access-egress"    = "all-traffic"
+      }
+    }
+    spec {
+      containers {
+        image = "us-docker.pkg.dev/cloudrun/container/hello" # Placeholder
+      }
+      service_account_name = google_service_account.dashboard_sa.email
+    }
+  }
+
+  traffic {
+    percent         = 100
+    latest_revision = true
+  }
+
+  autogenerate_revision_name = true
+  depends_on                 = [google_cloud_run_service.api]
 }
 
-# 6. Allow public (unauthenticated) users to view the dashboard
-resource "google_cloud_run_v2_service_iam_member" "dashboard_public_access" {
-  project  = google_cloud_run_v2_service.dashboard.project
-  location = google_cloud_run_v2_service.dashboard.location
-  name     = google_cloud_run_v2_service.dashboard.name
+# 6. Allow public (unauthenticated) users to view the dashboard (v1 resource)
+resource "google_cloud_run_service_iam_member" "dashboard_public_access" {
+  project  = google_cloud_run_service.dashboard.project
+  location = google_cloud_run_service.dashboard.location
+  service  = google_cloud_run_service.dashboard.name
   role     = "roles/run.invoker"
   member   = "allUsers"
 }
-
-output "api_service_url" {
-  description = "The public URL of the netprobe-api service"
-  value       = google_cloud_run_v2_service.api.uri
-}
-
-output "dashboard_service_url" {
-  description = "The public URL of the netprobe-dashboard service"
-  value       = google_cloud_run_v2_service.dashboard.uri
-}
-
