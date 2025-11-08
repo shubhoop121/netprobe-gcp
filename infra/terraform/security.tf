@@ -30,7 +30,8 @@ resource "google_compute_security_policy" "main" {
       versioned_expr = "SRC_IPS_V1"
       config {
         # KEEP YOUR ACTUAL IP HERE!
-        src_ip_ranges = ["34.126.181.54/32"]
+        src_ip_ranges = ["34.142.202.229/32"]
+        
       }
     }
     description = "Allow Developer Access (Cloud Shell)"
