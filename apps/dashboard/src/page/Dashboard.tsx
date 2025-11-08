@@ -1,6 +1,6 @@
-import DeviceMap from '../components/DeviceMap';
-import LiveAlertFeed from '../components/LiveAlertFeed';
-import NetworkActivity from '../components/NetworkActivity';
+import DeviceMap from '../components/DeviceMap.tsx';
+import LiveAlertFeed from '../components/LiveAlertFeed.tsx';
+import NetworkActivity from '../components/NetworkActivity.tsx';
 import './Dashboard.css';
 
 export default function Dashboard({ onLogout }: { onLogout: () => void }) {
