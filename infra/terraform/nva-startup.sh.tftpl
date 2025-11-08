@@ -1,5 +1,5 @@
 #!/bin/bash
-# Redirect all output to a dedicated log file for easy debugging
+# Redirect all output to a dedicated log file
 exec > >(sudo tee /var/log/startup-script.log) 2>&1
 
 set -e
