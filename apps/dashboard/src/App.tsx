@@ -16,7 +16,7 @@ export default function App() {
 
   const checkDbConnection = async () => {
     try {
-      const res = await fetch(`${API_BASE}/ping-db`);
+      const res = await fetch('/ping-db');
       if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
       const data = await res.json();
       setDbStatus(data.message || data.status || "Connected");

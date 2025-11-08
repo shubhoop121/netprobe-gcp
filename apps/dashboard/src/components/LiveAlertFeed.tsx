@@ -41,7 +41,7 @@ export default function LiveAlertFeed() {
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
-        const res = await axios.get(`${import.meta.env.VITE_API_URL}/alerts/latest`);
+       const res = await axios.get('/api/v1/logs/alerts'); // Use the new v1 path
         // Normalize backend data if necessary
         const data = (res.data as unknown as Alert[]).map((item, i) => ({
           id: item.id || i.toString(),

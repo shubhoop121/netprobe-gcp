@@ -25,8 +25,8 @@ export default function DeviceMap() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const resDevices = await axios.get(`${import.meta.env.VITE_API_URL}/devices`);
-        const resConnections = await axios.get(`${import.meta.env.VITE_API_URL}/connections`);
+        const resDevices = await axios.get('/api/v1/devices');
+        const resConnections = await axios.get('/api/v1/logs/connections'); // Use the new v1 path
         setDevices(resDevices.data);
         setConnections(resConnections.data);
       } catch (err) {

@@ -35,7 +35,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       }
 
       // Otherwise, call the backend API
-      const endpoint = isSignUp ? `${API_BASE}/register` : `${API_BASE}/login`;
+     const endpoint = isSignUp ? '/api/register' : '/api/login';
       const response = await axios.post(endpoint, { email, password });
 
       if (response.data.success) {

@@ -6,13 +6,29 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // Proxy all requests starting with /api to the Flask backend
-      '/api': {
-        target: 'http://127.0.0.1:8080', // Flask server
+      // For your new v1 endpoints
+      '/api/v1': {
+        target: 'http://127.0.0.1:8080',
         changeOrigin: true,
-        // Rewrite the path: remove '/api' before sending to Flask
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        secure: false,
       },
+      // For your /ping-db
+      '/ping-db': {
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        secure: false,
+      },
+      // For your /api/login and /api/register
+      '/api/login': {
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api/register': {
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true,
+        secure: false,
+      }
     }
   }
 })
