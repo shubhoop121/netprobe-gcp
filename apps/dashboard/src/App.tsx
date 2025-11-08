@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import Login from "./page/Login";
-import Dashboard from "./page/Dashboard";
+import Login from "./page/Login.tsx";
+import Dashboard from "./page/Dashboard.tsx";
 
 // Main App Component
 export default function App() {
