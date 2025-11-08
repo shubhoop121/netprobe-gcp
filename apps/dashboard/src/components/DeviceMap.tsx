@@ -16,6 +16,20 @@ interface DeviceConnection {
   target_device_id: string;
 }
 
+function asArray<T>(maybeArray: any): T[] {
+  // If it's already an array, return it.
+  if (Array.isArray(maybeArray)) return maybeArray as T[];
+  // If it's an object with common array keys, return the first found.
+  const candidates = ['devices', 'items', 'results', 'data', 'connections', 'rows'];
+  if (maybeArray && typeof maybeArray === 'object') {
+    for (const k of candidates) {
+      if (Array.isArray(maybeArray[k])) return maybeArray[k] as T[];
+    }
+  }
+  // Last resort: return empty array
+  return [];
+}
+
 export default function DeviceMap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -23,20 +37,39 @@ export default function DeviceMap() {
 
   // Fetch data from Flask backend
   useEffect(() => {
+    let cancelled = false;
+
     const fetchData = async () => {
       try {
-        const resDevices = await axios.get('/api/v1/devices');
-        const resConnections = await axios.get('/api/v1/logs/connections'); // Use the new v1 path
-        setDevices(resDevices.data);
-        setConnections(resConnections.data);
+        const [resDevices, resConnections] = await Promise.all([
+          axios.get('/api/v1/devices'),
+          axios.get('/api/v1/logs/connections'),
+        ]);
+
+        if (cancelled) return;
+
+        // Safely extract arrays from a variety of possible response shapes
+        const devicesArr = asArray<Device>(resDevices.data);
+        const connectionsArr = asArray<DeviceConnection>(resConnections.data);
+
+        // Defensive: ensure items look like the expected shape (optional)
+        // You can add more checks here if needed.
+
+        setDevices(devicesArr);
+        setConnections(connectionsArr);
       } catch (err) {
+        // Prefer logging the response body if available
         console.error('Error fetching device data:', err);
       }
     };
 
     fetchData();
     const interval = setInterval(fetchData, 10000); // refresh every 10 seconds
-    return () => clearInterval(interval);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   // Draw devices and connections

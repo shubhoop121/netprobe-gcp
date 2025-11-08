@@ -11,26 +11,23 @@ interface Alert {
   signature?: string;
 }
 
+// This is the new severityConfig object.
+// It uses numbers (1, 2, 3) as keys to match your database.
 const severityConfig = {
-  high: {
+  1: { // High Severity
     icon: 'text-red-600',
     bg: 'bg-red-50',
     label: 'High Severity Alert'
   },
-  medium: {
+  2: { // Medium Severity
     icon: 'text-orange-600',
     bg: 'bg-orange-50',
     label: 'Medium Severity Alert'
   },
-  low: {
+  3: { // Low Severity
     icon: 'text-yellow-600',
     bg: 'bg-yellow-50',
     label: 'Low Severity Alert'
-  },
-  info: {
-    icon: 'text-blue-600',
-    bg: 'bg-blue-50',
-    label: 'Info Alert'
   }
 };
 
@@ -43,7 +40,7 @@ export default function LiveAlertFeed() {
       try {
        const res = await axios.get('/api/v1/logs/alerts'); // Use the new v1 path
         // Normalize backend data if necessary
-        const data = (res.data as unknown as Alert[]).map((item, i) => ({
+        const data = (res.data.logs as any[]).map((item, i) => ({
           id: item.id || i.toString(),
           ts: item.ts || '',
           severity: item.severity || 'info',
@@ -72,11 +69,17 @@ export default function LiveAlertFeed() {
           </div>
         ) : (
           alerts.map((alert) => {
-            const config = severityConfig[alert.severity];
-            return (
-              <div
-                key={alert.id}
-                className={`px-6 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors ${config.bg}`}
+  // This line correctly looks for a number (1, 2, or 3)
+  // and defaults to 3 if it finds anything else.
+  const config = severityConfig[alert.severity as 1 | 2 | 3] || severityConfig[3];
+
+  return (
+    <div
+      key={alert.id}
+      // This line (79) will now work because 'config' will always be defined
+      className={`px-6 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors ${config.bg}`}
+    
+//...
               >
                 <FaExclamationTriangle className={`w-6 h-6 ${config.icon}`} />
                 <div className="flex-1">
