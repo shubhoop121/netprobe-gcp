@@ -5,18 +5,47 @@ import psycopg2
 import psycopg2.extras
 import sys
 import argparse
+from google.cloud import secretmanager # --- CHANGE 1: Add Google Secret Manager ---
 
-DB_HOST = os.environ.get('DB_HOST', 'db')
+# --- CHANGE 2: Remove global DB_HOST, add PROJECT_ID ---
 DB_NAME = os.environ.get('DB_NAME', 'netprobe_logs')
 DB_USER = os.environ.get('DB_USER', 'netprobe_user')
 DB_PASSWORD = os.environ.get('DB_PASSWORD')
+PROJECT_ID = "netprobe-473119" # You can also get this from metadata server
 
 # Constants
 LOG_FILE_PATH_DEFAULT = "/opt/zeek/logs/current/conn.log"
 BATCH_SIZE = 100
 FLUSH_INTERVAL = 5
 
-def get_db_connection():
+# --- CHANGE 3: Add new function to get host IP ---
+def get_db_host_from_secret():
+    """
+    Fetches the live DB host IP from Secret Manager.
+    This function will block and retry until it succeeds,
+    solving the NVA startup race condition.
+    """
+    client = secretmanager.SecretManagerServiceClient()
+    secret_name = f"projects/{PROJECT_ID}/secrets/db-private-ip-live/versions/latest"
+    
+    while True:
+        try:
+            print(f"[{time.ctime()}] Attempting to fetch 'db-private-ip-live' secret...")
+            response = client.access_secret_version(request={"name": secret_name})
+            db_host = response.payload.data.decode("UTF-8").strip()
+            
+            # Check for valid, non-dummy IP
+            if db_host and db_host != "dummy_ip_for_plan" and db_host != "":
+                print(f"[{time.ctime()}] Successfully fetched DB_HOST: {db_host}")
+                return db_host
+            else:
+                raise ValueError(f"Fetched invalid or dummy IP: '{db_host}'")
+        except Exception as e:
+            print(f"[{time.ctime()}] Failed to fetch DB_HOST ({e}). Retrying in 10s...", file=sys.stderr)
+            time.sleep(10)
+
+# --- CHANGE 4: Modify get_db_connection ---
+def get_db_connection(db_host): # Pass in the host
     """Establishes a connection to the PostgreSQL database with retries."""
     conn = None
     while not conn:
@@ -24,12 +53,12 @@ def get_db_connection():
             if not DB_PASSWORD:
                 raise ValueError("DB_PASSWORD environment variable not set.")
             conn = psycopg2.connect(
-                host=DB_HOST,
+                host=db_host, # Use the passed-in host
                 dbname=DB_NAME,
                 user=DB_USER,
                 password=DB_PASSWORD
             )
-            print(f"[{time.ctime()}] Successfully connected to database '{DB_HOST}'.")
+            print(f"[{time.ctime()}] Successfully connected to database '{db_host}'.")
             return conn
         except psycopg2.OperationalError as e:
             print(f"[{time.ctime()}] Connection failed: {e}. Retrying in 5 seconds...", file=sys.stderr)
@@ -93,9 +122,15 @@ def insert_batch(cursor, batch):
         print(f"[{time.ctime()}] Database batch insert failed: {e}", file=sys.stderr)
         cursor.connection.rollback()
 
+# --- CHANGE 5: Modify main() ---
 def main(log_file_path):
     """Main function to tail the log and ship data to the database."""
-    conn = get_db_connection()
+    
+    # First, block until we get the real DB host IP
+    db_host = get_db_host_from_secret()
+    
+    # Now, connect to the database
+    conn = get_db_connection(db_host)
     cursor = conn.cursor()
 
     record_batch = []
