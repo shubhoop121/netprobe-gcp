@@ -23,25 +23,43 @@ def _serialize_row(row):
 def get_connections():
     logger.info("--- GET /api/v1/logs/connections ---")
     
+    # --- 1. Get query parameters ---
     cursor_str = request.args.get('cursor')
     limit = int(request.args.get('limit', 50))
+    filter_ip = request.args.get('source_ip') # New filter param
     
-    # FIX: Querying the correct table 'connections'
+    # --- 2. Build the query dynamically ---
     query_str = "SELECT ts, uid, source_ip, source_port, destination_ip, destination_port, proto, service FROM connections"
     params = {}
+    
+    # Use a WHERE clause
+    # We will build a list of "where" conditions
+    where_clauses = []
 
     if cursor_str:
         try:
-            # FIX: Using correct pagination columns 'ts' and 'uid'
             last_ts, last_uid = json.loads(base64.urlsafe_b64decode(cursor_str))
-            query_str += " WHERE (ts, uid) < (:last_ts, :last_uid)"
-            params = {"last_ts": last_ts, "last_uid": last_uid}
+            # Add keyset pagination as the first "where"
+            where_clauses.append("(ts, uid) < (:last_ts, :last_uid)")
+            params["last_ts"] = last_ts
+            params["last_uid"] = last_uid
         except:
             return jsonify(error="Invalid cursor format"), 400
     
-    # FIX: Using correct pagination columns 'ts' and 'uid'
+    # --- 3. Add the new filter ---
+    if filter_ip:
+        where_clauses.append("source_ip = :filter_ip")
+        params["filter_ip"] = filter_ip
+    
+    # --- 4. Assemble the full query ---
+    if where_clauses:
+        query_str += " WHERE " + " AND ".join(where_clauses)
+    
     query_str += " ORDER BY ts DESC, uid DESC LIMIT :limit"
     params["limit"] = limit
+    
+    logger.info(f"Executing query: {query_str}")
+    logger.info(f"With params: {params}")
 
     try:
         db = get_db()

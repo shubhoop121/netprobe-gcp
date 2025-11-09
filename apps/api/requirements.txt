@@ -6,3 +6,5 @@ google-cloud-secret-manager
 gunicorn
 flask-cors
 google-cloud-compute
+pytest
+pytest-flask

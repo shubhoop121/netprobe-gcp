@@ -35,9 +35,25 @@ export default function DeviceMap() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [connections, setConnections] = useState<DeviceConnection[]>([]);
 
-  // Fetch data from Flask backend
-  useEffect(() => {
+    useEffect(() => {
     let cancelled = false;
+
+    // Helper: safely coerce many possible shapes to an array
+    const toArray = <T,>(val: unknown): T[] => {
+      if (!val) return [];
+      if (Array.isArray(val)) return val as T[];
+      if (typeof val === 'object' && val !== null) {
+        const o = val as Record<string, unknown>;
+        const keys = ['devices', 'items', 'results', 'data', 'logs', 'connections', 'rows'];
+        for (const k of keys) {
+          if (Array.isArray(o[k])) return o[k] as T[];
+        }
+      }
+      return [];
+    };
+
+    const isFingerprintArray = (v: unknown): v is Array<{ type?: string; value?: string }> =>
+      Array.isArray(v) && v.every(item => typeof item === 'object' && item !== null);
 
     const fetchData = async () => {
       try {
@@ -48,24 +64,140 @@ export default function DeviceMap() {
 
         if (cancelled) return;
 
-        // Safely extract arrays from a variety of possible response shapes
-        const devicesArr = asArray<Device>(resDevices.data);
-        const connectionsArr = asArray<DeviceConnection>(resConnections.data);
+        // Normalize responses into arrays
+        const rawDevices = toArray<Record<string, unknown>>(resDevices.data);
+        const rawConnections = toArray<Record<string, unknown>>(resConnections.data);
 
-        // Defensive: ensure items look like the expected shape (optional)
-        // You can add more checks here if needed.
+        // Map of IP -> known device object (raw)
+        const ipToKnownDevice = new Map<string, Record<string, unknown>>();
+        const ipSet = new Set<string>();
 
-        setDevices(devicesArr);
-        setConnections(connectionsArr);
+        // Inspect known devices for fingerprints of type 'internal_ip'
+        rawDevices.forEach((d) => {
+          // try a few common fingerprint locations (flexible)
+          const fingerprints =
+            (d.fingerprints as unknown) ?? (d.meta && (d.meta as any).fingerprints) ?? (d['fingerprint'] as unknown);
+
+          if (isFingerprintArray(fingerprints)) {
+            (fingerprints as Array<{ type?: string; value?: string }>).forEach((fp) => {
+              if (fp && fp.type === 'internal_ip' && typeof fp.value === 'string') {
+                ipSet.add(fp.value);
+                ipToKnownDevice.set(fp.value, d);
+              }
+            });
+          }
+
+          // Also handle case where device has an 'internal_ip' top-level field
+          if (typeof d.internal_ip === 'string') {
+            ipSet.add(d.internal_ip as string);
+            ipToKnownDevice.set(d.internal_ip as string, d);
+          }
+
+          // If device has an 'addresses' array with 'internal' or similar
+          if (Array.isArray(d.addresses)) {
+            (d.addresses as unknown[]).forEach((a) => {
+              if (typeof a === 'string') {
+                ipSet.add(a);
+                ipToKnownDevice.set(a, d);
+              } else if (typeof a === 'object' && a !== null) {
+                const addr = (a as Record<string, unknown>).ip as string | undefined;
+                if (typeof addr === 'string') {
+                  ipSet.add(addr);
+                  ipToKnownDevice.set(addr, d);
+                }
+              }
+            });
+          }
+        });
+
+        // Collect IPs from connections logs
+        rawConnections.forEach((conn) => {
+          const s = (conn.source_ip ?? conn.src_ip ?? conn.source) as unknown;
+          const t = (conn.destination_ip ?? conn.dst_ip ?? conn.destination) as unknown;
+
+          if (typeof s === 'string') ipSet.add(s);
+          if (typeof t === 'string') ipSet.add(t);
+        });
+
+        // Build normalized devices array of type Device (expected by your drawing code)
+        const normalizedDevices: Device[] = Array.from(ipSet).map((ip) => {
+          const known = ipToKnownDevice.get(ip);
+          // try to reuse coordinates if present on known device (flexible field names)
+          const maybeX =
+            (known && (known.x_position as unknown)) ??
+            (known && (known.x as unknown)) ??
+            (known && (known.position && (known.position.x as unknown)));
+          const maybeY =
+            (known && (known.y_position as unknown)) ??
+            (known && (known.y as unknown)) ??
+            (known && (known.position && (known.position.y as unknown)));
+
+          const x_position =
+            typeof maybeX === 'number' ? (maybeX as number) : Math.random() * 0.8 + 0.1; // random in [0.1,0.9]
+          const y_position =
+            typeof maybeY === 'number' ? (maybeY as number) : Math.random() * 0.8 + 0.1;
+
+          const name =
+            (known && (known.friendly_name as unknown)) ??
+            (known && (known.name as unknown)) ??
+            ip;
+
+          const status =
+            (known && (known.status as unknown)) === 'online' ||
+            (known && (known.state as unknown)) === 'online'
+              ? 'online'
+              : 'offline';
+
+          return {
+            id: ip,
+            name: typeof name === 'string' ? name : ip,
+            x_position,
+            y_position,
+            status: status === 'online' ? 'online' : 'offline',
+          } as Device;
+        });
+
+        // Build normalized connections in the DeviceConnection shape (source_device_id, target_device_id)
+        const normalizedConnections: DeviceConnection[] = rawConnections
+          .map((c, idx) => {
+            const src =
+              (c.source_ip as unknown) ??
+              (c.src_ip as unknown) ??
+              (c.source as unknown) ??
+              (c.src as unknown);
+            const dst =
+              (c.destination_ip as unknown) ??
+              (c.dst_ip as unknown) ??
+              (c.destination as unknown) ??
+              (c.dst as unknown);
+
+            if (typeof src === 'string' && typeof dst === 'string') {
+              return {
+                id: (c.id as string) ?? `conn-${idx}-${src}-${dst}`,
+                source_device_id: src,
+                target_device_id: dst,
+              } as DeviceConnection;
+            }
+
+            return null;
+          })
+          .filter((x): x is DeviceConnection => x !== null);
+
+        // Update state (only if component still mounted)
+        if (!cancelled) {
+          setDevices(normalizedDevices);
+          setConnections(normalizedConnections);
+        }
       } catch (err) {
-        // Prefer logging the response body if available
-        console.error('Error fetching device data:', err);
+        if (!cancelled) {
+          // log error for debugging
+          console.error('Error fetching device data:', err);
+        }
       }
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 10000); // refresh every 10 seconds
-
+    const interval = setInterval(fetchData, 10000);
     return () => {
       cancelled = true;
       clearInterval(interval);
