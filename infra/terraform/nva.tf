@@ -16,7 +16,7 @@ resource "google_compute_instance_template" "nva" {
   }
 
   disk {
-    source_image = "debian-cloud/debian-11"
+    source_image = "global/images/netprobe-nva-golden-image-v3"
     auto_delete  = true
     boot         = true
   }
