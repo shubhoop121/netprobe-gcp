@@ -30,8 +30,10 @@ jobs:
       - name: "Cache Terraform providers"
         uses: actions/cache@v4
         with:
-          path: .terraform
+          path: infra/terraform/.terraform
           key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**.tf') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
           
       - name: "Authenticate to Google Cloud"
         uses: "google-github-actions/auth@v2"
@@ -77,8 +79,10 @@ jobs:
       - name: "Cache Terraform providers"
         uses: actions/cache@v4
         with:
-          path: .terraform
+          path: infra/terraform/.terraform
           key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**.tf') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
 
       - uses: "google-github-actions/auth@v2"
         with:
@@ -160,8 +164,8 @@ jobs:
           context: ./apps/api
           push: true
           tags: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           
       - name: "Fetch Live Database IP"
         id: get_db_ip
@@ -229,8 +233,8 @@ jobs:
           context: ./apps/dashboard
           push: true
           tags: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       
       - name: "Deploy Dashboard to Cloud Run"
         run: |
@@ -259,8 +263,10 @@ jobs:
       - name: "Cache Terraform providers"
         uses: actions/cache@v4
         with:
-          path: .terraform
+          path: infra/terraform/.terraform
           key: ${{ runner.os }}-terraform-${{ hashFiles('infra/terraform/**.tf') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
       - name: "Authenticate to Google Cloud"
         uses: "google-github-actions/auth@v2"
         with:
