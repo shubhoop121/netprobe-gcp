@@ -102,7 +102,15 @@ jobs:
         uses: 'google-github-actions/setup-gcloud@v2'
       - name: "Update Live DB IP in Secret Manager"
         run: |
+          echo "--- Ensuring 'db-private-ip-live' secret exists ---"
+          gcloud secrets create db-private-ip-live \
+            --replication-policy="automatic" \
+            --project=${{ env.PROJECT_ID }} \
+            || echo "Secret 'db-private-ip-live' already exists. Proceeding."
+          
+          echo "--- Updating 'db-private-ip-live' secret with new IP ---"
           DB_IP=$(cd ./infra/terraform && terraform output -raw netprobe_db_private_ip)
+          
           echo "$DB_IP" | gcloud secrets versions add db-private-ip-live --data-file=-
       - name: "Wait for NVA Rolling Update to Complete"
         run: |
