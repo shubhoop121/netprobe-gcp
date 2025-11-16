@@ -14,7 +14,8 @@
     }
   },
 
-  "postCreateCommand": "pip install --no-cache-dir -r ./apps/api/requirements.txt",
+  "postCreateCommand": "pip install --no-cache-dir -r ./apps/api/requirements.txt && cd apps/dashboard && yarn install",
+
 
   "customizations": {
     "vscode": {
