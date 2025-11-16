@@ -1,0 +1,4 @@
+yarn install axios
+yarn install --save-dev @types/axios
+yarn install react-icons
+yarn install react-router-dom

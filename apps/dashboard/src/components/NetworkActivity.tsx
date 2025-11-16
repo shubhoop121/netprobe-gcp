@@ -15,9 +15,9 @@ export default function NetworkActivity() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await axios.get(`${import.meta.env.VITE_API_URL}/connections/latest`);
+       const res = await axios.get('/api/v1/logs/connections'); // Use the new v1 path
         // Normalize backend response to NetworkDataPoint[]
-        const parsedData = (res.data as unknown as { ts?: string; duration?: number; bytes?: number }[]).map((item, index) => ({
+       const parsedData = (res.data.logs as any[]).map((item, index) => ({
           ts: item.ts || `T${index}`,
           value: item.duration || item.bytes || Math.random() * 100, // use any metric available
         }));

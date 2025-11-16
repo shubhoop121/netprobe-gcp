@@ -32,24 +32,7 @@ steps:
           fi
           
           echo "--- Applying schema ---"
-          psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" <<-EOF
-            CREATE TABLE IF NOT EXISTS connections (
-              id SERIAL PRIMARY KEY,
-              ts TIMESTAMP WITH TIME ZONE NOT NULL,
-              uid VARCHAR(255) UNIQUE NOT NULL,
-              source_ip INET NOT NULL,
-              source_port INTEGER NOT NULL,
-              destination_ip INET NOT NULL,
-              destination_port INTEGER NOT NULL,
-              proto VARCHAR(6),
-              service VARCHAR(255),
-              duration FLOAT,
-              orig_bytes BIGINT,
-              resp_bytes BIGINT,
-              conn_state VARCHAR(10),
-              logged_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-          EOF
+          psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -f infra/db_init/1_schema.sql
           
           echo "--- Schema applied successfully ---"
           echo "--- Shutting down proxy ---"

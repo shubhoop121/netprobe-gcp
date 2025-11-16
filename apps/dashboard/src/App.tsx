@@ -3,15 +3,34 @@ import { useState, useEffect } from "react";
 import Login from "./page/Login.tsx";
 import Dashboard from "./page/Dashboard.tsx";
 
-// Main App Component
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [dbStatus, setDbStatus] = useState<string>("Checking...");
 
-  // Check login state from localStorage when app loads
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+
+  // Check login state and DB status on load
   useEffect(() => {
-    const token = localStorage.getItem("authToken");
-    setIsLoggedIn(!!token);
-  }, []);
+  const token = localStorage.getItem("authToken");
+  setIsLoggedIn(!!token);
+
+  const checkDbConnection = async () => {
+    try {
+      const res = await fetch('/ping-db');
+      if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
+      const data = await res.json();
+      setDbStatus(data.message || data.status || "Connected");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setDbStatus(`Failed to connect: ${err.message}`);
+      } else {
+        setDbStatus("Failed to connect to API");
+      }
+    }
+  };
+
+  checkDbConnection();
+}, [API_BASE]);
 
   return (
     <BrowserRouter>
@@ -33,7 +52,10 @@ export default function App() {
           path="/dashboard"
           element={
             isLoggedIn ? (
-              <DashboardWrapper onLogout={() => setIsLoggedIn(false)} />
+              <DashboardWrapper
+                onLogout={() => setIsLoggedIn(false)}
+                dbStatus={dbStatus}
+              />
             ) : (
               <Navigate to="/" replace />
             )
@@ -47,20 +69,26 @@ export default function App() {
   );
 }
 
-// ✅ Wrapper for Login so we can use navigation inside
+// ✅ Wrapper for Login to allow navigation
 function LoginWrapper({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   const navigate = useNavigate();
 
   const handleLoginSuccess = () => {
     onLoginSuccess();
-    navigate("/dashboard"); // redirect after login
+    navigate("/dashboard");
   };
 
   return <Login onLoginSuccess={handleLoginSuccess} />;
 }
 
-// ✅ Wrapper for Dashboard to handle logout and navigation
-function DashboardWrapper({ onLogout }: { onLogout: () => void }) {
+// ✅ Wrapper for Dashboard
+function DashboardWrapper({
+  onLogout,
+  dbStatus,
+}: {
+  onLogout: () => void;
+  dbStatus: string;
+}) {
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -69,5 +97,5 @@ function DashboardWrapper({ onLogout }: { onLogout: () => void }) {
     navigate("/");
   };
 
-  return <Dashboard onLogout={handleLogout} />;
+  return <Dashboard onLogout={handleLogout} dbStatus={dbStatus} />;
 }

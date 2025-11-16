@@ -3,55 +3,56 @@ import logging
 import sqlalchemy
 from flask import Blueprint, jsonify, request
 from .db import get_db
-from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
-bp = Blueprint('security', __name__, url_prefix='/api/v1/actions') # <-- Note the new path
+bp = Blueprint('security', __name__, url_prefix='/api/v1/actions')
 
 @bp.route('/block-ip', methods=['POST'])
 def block_ip():
     """
-    This is the new "Block IP" logic.
-    It writes the IP to the 'blocked_ips' table with an expiry time.
-    This replaces the old mock function [cite: 1319, 1370-1372].
+    Writes the IP to the 'blocked_ips' table.
+    Matches the 1_schema.sql file.
     """
     logger.info("--- POST /api/v1/actions/block-ip ---")
     
     data = request.json
     ip_to_block = data.get("ip")
-    # Default block duration is 1 hour (3600 seconds)
-    duration_sec = int(data.get("duration_sec", 3600)) 
+    reason = data.get("reason", "Blocked by analyst via API")
+    blocked_by = data.get("user", "local-admin@netprobe.com") # Get this from auth later
     
     if not ip_to_block:
         logger.error("--- block-ip: 'ip' field missing from request body. ---")
         return jsonify(error="Missing 'ip' in request body"), 400
 
-    # This implements the application-layer expiry logic [cite: 1319]
-    expiry_time = datetime.now() + timedelta(seconds=duration_sec)
-    
+    # FIX: This INSERT matches your new schema
     query = sqlalchemy.text(
         """
-        INSERT INTO blocked_ips (ip_address, block_timestamp, expiry_timestamp)
-        VALUES (:ip, NOW(), :expiry)
+        INSERT INTO blocked_ips (ip_address, blocked_by, reason, active)
+        VALUES (:ip, :user, :reason, TRUE)
         ON CONFLICT (ip_address) DO UPDATE SET
-            block_timestamp = NOW(),
-            expiry_timestamp = :expiry,
-            unblocked_status = false
+            blocked_at = NOW(),
+            blocked_by = :user,
+            reason = :reason,
+            active = TRUE;
         """
     )
     
     try:
         db = get_db()
         with db.connect() as conn:
-            conn.execute(query, {"ip": ip_to_block, "expiry": expiry_time})
-            conn.commit() # This is an INSERT, so we must commit
+            conn.execute(query, {
+                "ip": ip_to_block, 
+                "user": blocked_by, 
+                "reason": reason
+            })
+            conn.commit() # Commit the INSERT
             
-        logger.info(f"--- LOCALLY BLOCKED IP: {ip_to_block} until {expiry_time.isoformat()} ---")
+        logger.info(f"--- LOCALLY BLOCKED IP: {ip_to_block} ---")
         
         return jsonify({
             "status": "blocking",
             "ip_blocked": ip_to_block,
-            "expires_at": expiry_time.isoformat()
+            "reason": reason
         }), 202
 
     except Exception as e:

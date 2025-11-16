@@ -92,3 +92,12 @@
   padding: 20px;
   box-shadow: 0 3px 6px rgba(17, 24, 39, 0.1);
 }
+
+/* Status colors for DB connectivity */
+.status-ok {
+  background-color: #10b981; /* green */
+}
+
+.status-fail {
+  background-color: #ef4444; /* red */
+}

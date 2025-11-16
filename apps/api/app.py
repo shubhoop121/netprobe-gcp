@@ -1,9 +1,27 @@
 import os
 import sys
 import logging
+<<<<<<< HEAD
+<<<<<<< HEAD
 import sqlalchemy
 from flask import Flask, jsonify
 from google.cloud import secretmanager
+=======
+from flask import Flask, jsonify
+from google.cloud import secretmanager
+from flask_cors import CORS  # <-- 1. IMPORT
+from google.cloud import secretmanager
+import sqlalchemy
+from dotenv import load_dotenv
+app = Flask(__name__)
+load_dotenv() # Load the .env file
+CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+>>>>>>> feat/phase3-local-dev
+=======
+import sqlalchemy
+from flask import Flask, jsonify
+from google.cloud import secretmanager
+>>>>>>> 580a25d8f573c42cfc7719dcc4b88c1d8a7866f9
 
 # --- Set up a loud logger ---
 logger = logging.getLogger()
@@ -83,8 +101,18 @@ def get_db():
             db = init_connection_pool()
         except Exception as e:
             logger.error(f"!!! CRITICAL: Failed to initialize database connection: {e}", exc_info=True)
+<<<<<<< HEAD
+<<<<<<< HEAD
             db = None # Keep it None so we can see the error
     return db
+# --- END FIX ---
+=======
+            db = None
+>>>>>>> feat/phase3-local-dev
+=======
+            db = None # Keep it None so we can see the error
+    return db
+>>>>>>> 580a25d8f573c42cfc7719dcc4b88c1d8a7866f9
 
 @app.route("/")
 def index():
