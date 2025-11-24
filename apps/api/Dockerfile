@@ -5,10 +5,17 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy the entire app folder structure
 COPY . .
 
+# Install gunicorn
 RUN pip install gunicorn
 
-EXPOSE ${PORT:-8080}
+# Expose the port (Cloud Run defaults to 8080)
+EXPOSE 8080
 
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 2 --limit-request-field_size 32768 app:app"]
+# --- THE FIX ---
+# 1. PYTHONPATH: Ensures Python can find the 'app' module
+# 2. CMD: Points to 'run.py' (the file) and 'app' (the object inside it)
+ENV PYTHONPATH=/app
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "run:app"]
