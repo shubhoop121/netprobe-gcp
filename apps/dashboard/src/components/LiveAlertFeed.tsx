@@ -46,7 +46,7 @@ export default function LiveAlertFeed() {
           severity: item.severity || 'info',
           message: item.signature || item.message || 'No details available',
         }));
-        setAlerts(data);
+        setAlerts(data.slice(0, 20));
       } catch (err) {
         console.error('Error fetching alerts:', err);
       }

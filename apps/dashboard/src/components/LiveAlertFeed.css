@@ -1,0 +1,18 @@
+.alert-feed-container {
+  max-height: 550px;   /* adjust height as needed */
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.alert-feed-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.alert-feed-container::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 4px;
+}
+
+.alert-feed-container::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}

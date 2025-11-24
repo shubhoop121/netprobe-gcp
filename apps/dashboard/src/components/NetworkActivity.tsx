@@ -51,7 +51,7 @@ export default function NetworkActivity() {
       ctx.fillStyle = '#9CA3AF';
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('No network activity data', rect.width / 2, rect.height / 2);
+      ctx.fillText('No network activity data', rect.width / 2, rect.height / 4);
       return;
     }
 

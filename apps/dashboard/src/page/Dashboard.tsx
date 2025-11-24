@@ -29,16 +29,26 @@ export default function Dashboard({ onLogout, dbStatus }: DashboardProps) {
       </header>
 
       <div className="dashboard-grid">
-        <div className="dashboard-card">
-          <LiveAlertFeed />
-        </div>
-        <div className="dashboard-card">
-          <NetworkActivity />
-        </div>
-        <div className="dashboard-card">
-          <DeviceMap />
-        </div>
-      </div>
+  
+  {/* LEFT SIDE — Live Alerts takes full height */}
+  <div className="dashboard-left">
+    <div className='dashboard-card'>
+      <LiveAlertFeed />
+    </div>
+  </div>
+
+  {/* RIGHT SIDE — Network Activity on top, DeviceMap on bottom */}
+  <div className="dashboard-right">
+    <div className="dashboard-right-top dashboard-card">
+      <NetworkActivity />
+    </div>
+    <div className="dashboard-right-bottom dashboard-card">
+      <DeviceMap />
+    </div>
+  </div>
+
+</div>
+
     </div>
   );
 }

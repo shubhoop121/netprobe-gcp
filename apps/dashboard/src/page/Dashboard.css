@@ -101,3 +101,34 @@
 .status-fail {
   background-color: #ef4444; /* red */
 }
+
+/* Main grid: Left and Right */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* 50% left, 50% right */
+  gap: 24px;
+  align-items: stretch;
+}
+
+/* Left column: LiveAlertFeed */
+.dashboard-left {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Right column: Stacked vertically */
+.dashboard-right {
+  display: grid;
+  grid-template-rows: 1fr 1fr; /* top = network, bottom = device map */
+  gap: 24px;
+}
+
+/* For mobile / tablet */
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;    /* stack everything vertically */
+  }
+  .dashboard-right {
+    grid-template-rows: auto auto; /* allow flexible height */
+  }
+}
