@@ -11,7 +11,10 @@ logger = logging.getLogger(__name__)
 db = None
 
 def get_db_password():
-    """Fetches the database password."""
+    """
+    Fetches the database password.
+    Kept the 'Old Code' version because it has better logging steps.
+    """
     db_pass = os.environ.get("DB_PASSWORD")
     if db_pass:
         logger.info("--- Found DB_PASSWORD in environment variable (local dev) ---")
@@ -31,7 +34,10 @@ def get_db_password():
         return None
 
 def init_connection_pool() -> sqlalchemy.engine.base.Engine:
-    """Initializes a connection pool for Cloud SQL."""
+    """
+    Initializes a connection pool for Cloud SQL.
+    Kept the 'Old Code' settings (max_overflow, timeout) for better production stability.
+    """
     DB_HOST = os.environ.get("DB_HOST")
     DB_USER = os.environ.get("DB_USER", "netprobe_user")
     DB_NAME = os.environ.get("DB_NAME", "netprobe_logs")
@@ -55,33 +61,36 @@ def init_connection_pool() -> sqlalchemy.engine.base.Engine:
     )
 
     logger.info(f"--- Attempting to create connection pool for user '{DB_USER}' at host '{DB_HOST}' ---")
+    
     pool = sqlalchemy.create_engine(
         db_uri,
         pool_size=5,
-        max_overflow=2,
-        pool_timeout=30,
+        max_overflow=2,  # Kept from old code
+        pool_timeout=30, # Kept from old code
         pool_recycle=1800,
     )
     logger.info("--- Connection pool created successfully. ---")
     return pool
 
 def get_db():
-    """Returns the 'db' connection pool, initializing it if needed."""
+    """
+    Returns the 'db' connection pool, initializing it if needed.
+    FIX APPLIED: Removed the try/except block. If init fails, we want it to raise 
+    the error immediately rather than returning None.
+    """
     global db
     if db is None:
         logger.info("--- 'db' object is None. Attempting to initialize connection pool... ---")
-        try:
-            db = init_connection_pool()
-        except Exception as e:
-            logger.error(f"!!! CRITICAL: Failed to initialize database connection: {e}", exc_info=True)
-            db = None
+        # We do NOT wrap this in try/except anymore. 
+        # If this fails, the app should crash loudly so we know why.
+        db = init_connection_pool()
+        
     return db
 
 def init_app(app):
     """
     Called by the factory to initialize the db pool.
-    We use @app.before_request to make sure the db is
-    ready before any request is handled.
+    Kept from old code to ensure DB is ready before requests.
     """
     @app.before_request
     def initialize_database():
