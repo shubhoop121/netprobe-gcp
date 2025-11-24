@@ -9,7 +9,7 @@ import sqlalchemy
 from .db import get_db
 
 def create_app():
-    # --- Set up a loud logger ---
+    # --- Set up a loud logger (Kept from old code for visibility) ---
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
     stderr_handler = logging.StreamHandler(sys.stderr)
@@ -24,45 +24,54 @@ def create_app():
     
     app = Flask(__name__)
     
-    # Allow requests from your local React app (http://localhost:3000)
+    # 2. Setup CORS
+    # Kept strict localhost:3000 from old code for safety.
+    # If using a proxy in prod, this might not strictly be needed, but it doesn't hurt.
     CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
-    # Initialize the database connection pool
+    # 3. Initialize Extensions
+    # This calls the init_app in db.py we just saved
     db.init_app(app)
 
-    # Import and register your routes (endpoints)
+    # 4. Register Blueprints
     from . import main_routes
     from . import security
     
     app.register_blueprint(main_routes.bp)
     app.register_blueprint(security.bp)
     
-    # --- ROOT-LEVEL ROUTES (MOVED INSIDE) ---
+    # --- ROOT-LEVEL ROUTES ---
 
     @app.route("/")
     def index():
         """Provides a simple health check."""
         logger.info("--- GET / (Health Check) ---")
-        return "NetProbe API is alive!"
+        # Updated response format to match new code's JSON style
+        return jsonify(status="ok", service="NetProbe API")
 
     @app.route("/ping-db")
     def ping_db():
         """Tests the database connection."""
         logger.info("--- GET /ping-db ---")
-        db_conn = get_db() # Get the connection pool
-        if not db_conn:
-            logger.error("--- /ping-db: Failing request because 'db' object is None. ---")
-            return jsonify(error="Database connection not initialized"), 500
         
         try:
+            # Note: get_db() returns the ENGINE/POOL
+            db_conn = get_db() 
+            
+            # Since we removed the None check in db.py, this might raise if init failed,
+            # which is good - it goes to the 'except' block below.
+            
             logger.info("--- /ping-db: Pinging database with 'SELECT 1' ---")
+            
+            # We must connect explicitly from the pool
             with db_conn.connect() as conn:
+                # Use sqlalchemy.text for safety
                 result = conn.execute(sqlalchemy.text("SELECT 1")).scalar()
             
             if result == 1:
                 return jsonify(status="ok", message="Database connection successful")
             else:
-                return jsonify(status="error", message="Database ping failed"), 500
+                return jsonify(status="error", message="Database ping failed (unexpected result)"), 500
 
         except Exception as e:
             logger.error(f"--- /ping-db: Database query failed: {e}", exc_info=True)
