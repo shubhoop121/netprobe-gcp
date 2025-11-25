@@ -5,7 +5,7 @@ from .db import get_db
 from .cloud_armor import block_ip_in_armor 
 
 logger = logging.getLogger(__name__)
-bp = Blueprint('security', __name__, url_prefix='/api/v1/actions')
+bp = Blueprint('security', __name__, url_prefix='/v1/actions')
 
 @bp.route('/block-ip', methods=['POST'])
 def block_ip():

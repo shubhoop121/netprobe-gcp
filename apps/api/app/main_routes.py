@@ -5,7 +5,7 @@ from flask import Blueprint, jsonify
 from .db import get_db
 
 logger = logging.getLogger(__name__)
-bp = Blueprint('main', __name__, url_prefix='/api/v1')
+bp = Blueprint('main', __name__, url_prefix='/v1')
 
 @bp.route('/stats', methods=['GET'])
 def get_stats():
