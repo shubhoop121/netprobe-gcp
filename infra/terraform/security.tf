@@ -44,8 +44,8 @@ resource "google_compute_security_policy" "main" {
     match {
       versioned_expr = "SRC_IPS_V1"
       config {
-        # Placeholder IP range (TEST-NET-1) to make Terraform happy.
-        # We will connect this to the Address Group later.
+        # Placeholder IP range (TEST-NET-1) to make Terraform happy
+        # We will connect this to the Address Group later
         src_ip_ranges = ["192.0.2.0/24"]
       }
     }
