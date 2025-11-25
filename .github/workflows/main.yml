@@ -269,9 +269,6 @@ jobs:
       - name: "Terraform Init" 
         working-directory: ./infra/terraform
         run: terraform init
-      - name: "Wait for NVA startup scripts"
-        if: "!contains(github.event.head_commit.message, '[skip-builds]')"
-        run: sleep 150
       
       - name: "Set up Cloud SDK"
         uses: 'google-github-actions/setup-gcloud@v2'

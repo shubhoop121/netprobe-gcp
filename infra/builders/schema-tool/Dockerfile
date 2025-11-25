@@ -2,7 +2,7 @@
 FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
 
 # 1. Install PostgreSQL Client
-RUN apt-get update && apt-get install -y postgresql-client && \
+RUN apt-get update && apt-get install -y postgresql-client procps && \
     rm -rf /var/lib/apt/lists/*
 
 # 2. Install Cloud SQL Proxy
