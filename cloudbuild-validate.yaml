@@ -1,11 +1,6 @@
 steps:
-  - name: 'gcr.io/cloud-builders/gcloud'
-    id: 'setup_tools'
-    entrypoint: 'bash'
-    args: ['-c', 'set -e; echo "--- [validate] Installing tools ---"; apt-get update && apt-get install -y postgresql-client curl; curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.10.0/cloud-sql-proxy.linux.amd64; chmod +x cloud-sql-proxy; ./cloud-sql-proxy --version']
-
-  # Start Proxy & Validate Records
-  - name: 'gcr.io/cloud-builders/gcloud'
+  # Validate Records using pre-baked image
+  - name: 'asia-south1-docker.pkg.dev/$PROJECT_ID/netprobe-docker-repo/schema-tool:latest'
     id: 'validate_records'
     secretEnv: ['PGPASSWORD']
     entrypoint: 'bash'
@@ -13,23 +8,24 @@ steps:
         - '-c'
         - |
           set -e
-          echo "Using provided PGPASSWORD (masked): [$$PGPASSWORD]"
-          echo "--- [validate] Starting Cloud SQL Proxy ---"
-          ./cloud-sql-proxy --private-ip "${PROJECT_ID}:${_SQL_REGION}:${_SQL_INSTANCE_NAME}" &
-          sleep 5
-
+          echo "--- [Optimized] Starting Cloud SQL Proxy ---"
+          cloud-sql-proxy --private-ip "${PROJECT_ID}:${_SQL_REGION}:${_SQL_INSTANCE_NAME}" &
+          
           echo "Waiting for proxy..."
-          apt-get update && apt-get install -y postgresql-client
+          until pg_isready -h 127.0.0.1 -U "${_SQL_USER}" -d "${_SQL_DBNAME}"; do
+            sleep 1
+          done
+
+          echo "--- Checking for records ---"
           if psql --host=127.0.0.1 --username="${_SQL_USER}" --dbname="${_SQL_DBNAME}" -t -c "SELECT 1 FROM connections LIMIT 1;" | grep -q 1; then
             echo "Validation successful: Records found."
           else
             echo "Validation failed: No records found."
-            echo "--- [validate] Shutting down proxy ---"
-            pkill -f cloud-sql-proxy || echo "Proxy already stopped."
+            pkill -f cloud-sql-proxy || true
             exit 1
           fi
-          echo "--- [validate] Shutting down proxy ---"
-          pkill -f cloud-sql-proxy || echo "Proxy already stopped."
+          
+          pkill -f cloud-sql-proxy || true
 
 substitutions:
   _SQL_REGION: 'asia-south1'

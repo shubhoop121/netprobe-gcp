@@ -55,45 +55,53 @@ class LogTailingWorker(threading.Thread):
         self.parser_func = parser_func
         self.insert_func = insert_func
         self.table_name = table_name
-        self.daemon = True # Die when main thread dies
+        self.daemon = True 
 
     def run(self):
-        print(f"[{self.table_name}-Worker] Starting to tail {self.log_file}")
-        conn = get_db_connection(self.db_host)
-        cursor = conn.cursor()
-        batch = []
-        last_flush = time.time()
+        # --- FIX: Infinite Retry Loop ---
+        while True:
+            print(f"[{self.table_name}-Worker] Starting tail on {self.log_file}")
+            conn = None
+            try:
+                conn = get_db_connection(self.db_host)
+                cursor = conn.cursor()
+                batch = []
+                last_flush = time.time()
 
-        try:
-            # Use tail -F to follow file rotations
-            proc = subprocess.Popen(['tail', '-F', '-n', '0', self.log_file], 
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            
-            for line in iter(proc.stdout.readline, b''):
-                line_str = line.decode('utf-8', errors='ignore').strip()
-                if not line_str or line_str.startswith('#'): continue
+                # Use tail -F to follow file rotations. -n 0 to skip old logs on startup.
+                proc = subprocess.Popen(['tail', '-F', '-n', '0', self.log_file], 
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                
+                for line in iter(proc.stdout.readline, b''):
+                    line_str = line.decode('utf-8', errors='ignore').strip()
+                    if not line_str or line_str.startswith('#'): continue
 
-                record = self.parser_func(line_str)
-                if record:
-                    batch.append(record)
+                    record = self.parser_func(line_str)
+                    if record:
+                        batch.append(record)
 
-                if len(batch) >= BATCH_SIZE or (time.time() - last_flush > FLUSH_INTERVAL and batch):
-                    self.insert_func(cursor, batch)
-                    conn.commit()
-                    print(f"[{self.table_name}-Worker] Flushed {len(batch)} records.")
-                    batch = []
-                    last_flush = time.time()
+                    if len(batch) >= BATCH_SIZE or (time.time() - last_flush > FLUSH_INTERVAL and batch):
+                        self.insert_func(cursor, batch)
+                        conn.commit()
+                        print(f"[{self.table_name}-Worker] Flushed {len(batch)} records.")
+                        batch = []
+                        last_flush = time.time()
 
-        except Exception as e:
-            print(f"!!! [{self.table_name}-Worker] CRASHED: {e}", file=sys.stderr)
-            # In a real prod system, we might want to restart the thread here.
+            except Exception as e:
+                # If table doesn't exist yet, or DB connection breaks:
+                print(f"!!! [{self.table_name}-Worker] CRASHED: {e}", file=sys.stderr)
+                print(f"!!! [{self.table_name}-Worker] Retrying in 10 seconds...", file=sys.stderr)
+                if conn:
+                    try: conn.close()
+                    except: pass
+                time.sleep(10)
+                # The loop will now restart, re-connect, and try again.
 
 # --- Zeek Specifics ---
 def parse_zeek(line):
     try:
         f = line.split('\t')
         if len(f) < 12: return None
-        # ts, uid, src_ip, src_port, dst_ip, dst_port, proto, service, duration, orig_bytes, resp_bytes, state
         return (float(f[0]), f[1], f[2], int(f[3]), f[4], int(f[5]), f[6], f[7], 
                 float(f[8]) if f[8] != '-' else None, 
                 int(f[9]) if f[9] != '-' else None, 
@@ -116,8 +124,6 @@ def parse_suricata(line):
         log = json.loads(line)
         if log.get('event_type') != 'alert': return None
         
-        # timestamp, alert_id (unique-ish), src_ip, dest_ip, sig_id, sig_msg, severity
-        # We create a synthetic alert_id because Suricata doesn't have a globally unique one per event
         alert_id = f"{log['flow_id']}-{log['in_iface']}-{log['timestamp']}"
         
         return (log['timestamp'], alert_id, log['src_ip'], log['dest_ip'], 
@@ -130,7 +136,6 @@ def insert_suricata(cursor, batch):
             timestamp, alert_id, source_ip, destination_ip, signature_id, signature, severity
         ) VALUES %s ON CONFLICT DO NOTHING
     """
-    # Suricata timestamp is already an ISO8601 string, Postgres handles it directly
     tmpl = '(%s, %s, %s, %s, %s, %s, %s)'
     psycopg2.extras.execute_values(cursor, sql, batch, template=tmpl, page_size=BATCH_SIZE)
 
@@ -139,13 +144,11 @@ if __name__ == "__main__":
     print("--- NetProbe Omni-Shipper Starting ---")
     db_host = get_db_host_from_secret()
 
-    # Start worker threads
     zeek_thread = LogTailingWorker(db_host, ZEEK_LOG, parse_zeek, insert_zeek, "Zeek")
     suricata_thread = LogTailingWorker(db_host, SURICATA_LOG, parse_suricata, insert_suricata, "Suricata")
 
     zeek_thread.start()
     suricata_thread.start()
 
-    # Keep main thread alive
     zeek_thread.join()
     suricata_thread.join()

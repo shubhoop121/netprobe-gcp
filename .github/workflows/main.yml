@@ -150,13 +150,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}-${{ hashFiles(format('apps/{0}/Dockerfile', env.API_SERVICE_NAME || env.DASHBOARD_SERVICE_NAME)) }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
       - name: "Authenticate to Google Cloud"
         uses: "google-github-actions/auth@v2"
         with:
@@ -217,14 +210,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}-${{ hashFiles(format('apps/{0}/Dockerfile', env.API_SERVICE_NAME || env.DASHBOARD_SERVICE_NAME)) }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
 
       - name: "Authenticate to Google Cloud"
         uses: "google-github-actions/auth@v2"
