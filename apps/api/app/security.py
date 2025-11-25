@@ -1,9 +1,7 @@
-# /apps/api/app/security.py
 import logging
 import sqlalchemy
 from flask import Blueprint, jsonify, request
 from .db import get_db
-# --- NEW: Import the Cloud Armor Helper ---
 from .cloud_armor import block_ip_in_armor 
 
 logger = logging.getLogger(__name__)
