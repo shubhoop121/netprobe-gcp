@@ -111,7 +111,7 @@ class LogTailingWorker(threading.Thread):
                     try: conn.close()
                     except: pass
                 time.sleep(10)
-                # Loop restarts -> Calls get_db_host_and_connect() -> Refetches Secret
+                # Loop restarts -> Calls get_db_host_and_connect() -> Refetch Secret
 
 # --- Zeek Specifics ---
 def parse_zeek(line):
