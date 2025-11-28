@@ -20,37 +20,54 @@ SURICATA_LOG = "/var/log/suricata/eve.json"
 BATCH_SIZE = 100
 FLUSH_INTERVAL = 5
 
-# --- Database Helpers (Common) ---
-def get_db_host_from_secret():
-    """Fetches DB host from Secret Manager (blocking retry)."""
-    client = secretmanager.SecretManagerServiceClient()
-    name = f"projects/{PROJECT_ID}/secrets/db-private-ip-live/versions/latest"
-    while True:
-        try:
-            print(f"[{time.ctime()}] Fetching DB_HOST secret...")
-            resp = client.access_secret_version(request={"name": name})
-            host = resp.payload.data.decode("UTF-8").strip()
-            if host: return host
-        except Exception as e:
-            print(f"[{time.ctime()}] Secret fetch failed: {e}. Retrying in 10s...", file=sys.stderr)
-            time.sleep(10)
+# --- Database Helpers ---
 
-def get_db_connection(db_host):
-    """Connects to DB (blocking retry)."""
+def get_db_host_and_connect():
+    """
+    Fetches the latest IP from Secret Manager AND connects.
+    We do this together so that if connection fails, we re-fetch the IP
+    on the next try (solving the stale IP race condition).
+    """
+    client = secretmanager.SecretManagerServiceClient()
+    secret_name = f"projects/{PROJECT_ID}/secrets/db-private-ip-live/versions/latest"
+    
+    # Retry loop for getting the secret AND connecting
     while True:
+        db_host = None
         try:
-            conn = psycopg2.connect(host=db_host, dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD)
-            print(f"[{time.ctime()}] Connected to DB at {db_host}.")
+            # 1. Fetch the Secret (Fresh every time)
+            print(f"[{time.ctime()}] Fetching DB_HOST secret...")
+            resp = client.access_secret_version(request={"name": secret_name})
+            db_host = resp.payload.data.decode("UTF-8").strip()
+            
+            if not db_host:
+                raise ValueError("Secret was empty")
+
+            print(f"[{time.ctime()}] Got DB_HOST: {db_host}. Connecting...")
+
+            # 2. Try to Connect
+            conn = psycopg2.connect(
+                host=db_host, 
+                dbname=DB_NAME, 
+                user=DB_USER, 
+                password=DB_PASSWORD,
+                connect_timeout=10 # Fail fast if IP is wrong
+            )
+            print(f"[{time.ctime()}] Connected successfully to {db_host}.")
             return conn
-        except psycopg2.OperationalError as e:
-            print(f"[{time.ctime()}] DB connect failed: {e}. Retrying in 5s...", file=sys.stderr)
-            time.sleep(5)
+
+        except Exception as e:
+            # If we fail (wrong IP, DB not ready, Secret not ready), we wait and loop.
+            # This forces a RE-FETCH of the secret on the next loop.
+            print(f"[{time.ctime()}] Connection/Secret failed (Host: {db_host}): {e}", file=sys.stderr)
+            print(f"[{time.ctime()}] Retrying in 10s...", file=sys.stderr)
+            time.sleep(10)
 
 # --- Worker Class ---
 class LogTailingWorker(threading.Thread):
-    def __init__(self, db_host, log_file, parser_func, insert_func, table_name):
+    # REMOVED db_host from init. We fetch it dynamically now.
+    def __init__(self, log_file, parser_func, insert_func, table_name):
         super().__init__()
-        self.db_host = db_host
         self.log_file = log_file
         self.parser_func = parser_func
         self.insert_func = insert_func
@@ -58,17 +75,17 @@ class LogTailingWorker(threading.Thread):
         self.daemon = True 
 
     def run(self):
-        # --- FIX: Infinite Retry Loop ---
         while True:
             print(f"[{self.table_name}-Worker] Starting tail on {self.log_file}")
             conn = None
             try:
-                conn = get_db_connection(self.db_host)
+                # --- FIX: Fetch Secret + Connect inside the loop ---
+                conn = get_db_host_and_connect()
                 cursor = conn.cursor()
+                
                 batch = []
                 last_flush = time.time()
 
-                # Use tail -F to follow file rotations. -n 0 to skip old logs on startup.
                 proc = subprocess.Popen(['tail', '-F', '-n', '0', self.log_file], 
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 
@@ -88,14 +105,13 @@ class LogTailingWorker(threading.Thread):
                         last_flush = time.time()
 
             except Exception as e:
-                # If table doesn't exist yet, or DB connection breaks:
                 print(f"!!! [{self.table_name}-Worker] CRASHED: {e}", file=sys.stderr)
                 print(f"!!! [{self.table_name}-Worker] Retrying in 10 seconds...", file=sys.stderr)
                 if conn:
                     try: conn.close()
                     except: pass
                 time.sleep(10)
-                # The loop will now restart, re-connect, and try again.
+                # Loop restarts -> Calls get_db_host_and_connect() -> Refetches Secret
 
 # --- Zeek Specifics ---
 def parse_zeek(line):
@@ -142,10 +158,12 @@ def insert_suricata(cursor, batch):
 # --- Main ---
 if __name__ == "__main__":
     print("--- NetProbe Omni-Shipper Starting ---")
-    db_host = get_db_host_from_secret()
+    
+    # We no longer fetch DB_HOST here. 
+    # Each thread will fetch it independently and retry until it's correct.
 
-    zeek_thread = LogTailingWorker(db_host, ZEEK_LOG, parse_zeek, insert_zeek, "Zeek")
-    suricata_thread = LogTailingWorker(db_host, SURICATA_LOG, parse_suricata, insert_suricata, "Suricata")
+    zeek_thread = LogTailingWorker(ZEEK_LOG, parse_zeek, insert_zeek, "Zeek")
+    suricata_thread = LogTailingWorker(SURICATA_LOG, parse_suricata, insert_suricata, "Suricata")
 
     zeek_thread.start()
     suricata_thread.start()
