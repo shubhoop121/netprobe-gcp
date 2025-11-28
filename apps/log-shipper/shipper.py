@@ -9,7 +9,6 @@ import threading
 from datetime import datetime
 from google.cloud import secretmanager
 
-# --- Configuration ---
 DB_NAME = os.environ.get('DB_NAME', 'netprobe_logs')
 DB_USER = os.environ.get('DB_USER', 'netprobe_user')
 DB_PASSWORD = os.environ.get('DB_PASSWORD')
