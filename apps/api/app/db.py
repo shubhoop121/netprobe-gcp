@@ -70,8 +70,9 @@ def serialize_cursor(ts, uid):
     """
     if not ts or not uid:
         return None
-    # Convert datetime to ISO string for JSON serialization
-    data = [ts.isoformat(), uid]
+    
+    ts_str = ts if isinstance(ts, str) else ts.isoformat()
+    data = [ts_str, uid]
     json_str = json.dumps(data)
     return base64.urlsafe_b64encode(json_str.encode()).decode()
 
