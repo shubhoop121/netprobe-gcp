@@ -2,7 +2,10 @@ import os
 import sqlalchemy
 import logging
 from google.cloud import secretmanager
-
+import base64
+import json
+from datetime import datetime
+from psycopg2.extras import RealDictCursor
 logger = logging.getLogger(__name__)
 db = None
 
@@ -57,3 +60,104 @@ def get_db():
 def init_app(app):
     """Register teardown/setup hooks if needed."""
     pass
+
+# --- KEYSET PAGINATION HELPERS ---
+
+def serialize_cursor(ts, uid):
+    """
+    Packs the sort keys (timestamp, uid) into a safe Base64 string.
+    Format: JSON [ts_iso_string, uid] -> Base64
+    """
+    if not ts or not uid:
+        return None
+    # Convert datetime to ISO string for JSON serialization
+    data = [ts.isoformat(), uid]
+    json_str = json.dumps(data)
+    return base64.urlsafe_b64encode(json_str.encode()).decode()
+
+def deserialize_cursor(cursor_str):
+    """
+    Unpacks the cursor string back into Python objects.
+    Returns: (datetime_obj, uid_str) or (None, None)
+    """
+    if not cursor_str:
+        return None, None
+    try:
+        json_str = base64.urlsafe_b64decode(cursor_str.encode()).decode()
+        ts_str, uid = json.loads(json_str)
+        return datetime.fromisoformat(ts_str), uid
+    except Exception as e:
+        print(f"Invalid cursor format: {e}")
+        return None, None
+
+def get_logs_keyset(limit=50, cursor=None, filters=None):
+    """
+    High-Performance Log Fetcher.
+    Uses tuple comparison (ts, uid) < (cursor_ts, cursor_uid) to seek.
+    """
+    pool = get_db()
+    
+    # 1. Parse the cursor (The "Bookmark")
+    cursor_ts, cursor_uid = deserialize_cursor(cursor)
+
+    # 2. Base Query
+    sql = """
+        SELECT ts, uid, source_ip, source_port, destination_ip, destination_port, 
+               proto, service, duration, conn_state
+        FROM connections
+        WHERE 1=1
+    """
+    params = {}
+
+    # 3. Apply Filters
+    if filters:
+        if filters.get('ip'):
+            sql += " AND (source_ip = %(ip)s OR destination_ip = %(ip)s)"
+            params['ip'] = filters['ip']
+    
+    # 4. Apply the Seek Logic
+    if cursor_ts and cursor_uid:
+        sql += " AND (ts, uid) < (%(cursor_ts)s, %(cursor_uid)s)"
+        params['cursor_ts'] = cursor_ts
+        params['cursor_uid'] = cursor_uid
+
+    # 5. Order and Limit
+    sql += " ORDER BY ts DESC, uid DESC LIMIT %(limit)s"
+    params['limit'] = limit + 1
+
+    logs = []
+    next_cursor = None
+
+    try:
+        with pool.connect() as conn:
+            # Access the raw DBAPI connection (psycopg2)
+            raw_conn = conn.connection
+            
+            # --- THE FIX ---
+            # Use try/finally instead of 'with' context manager for the cursor
+            cur = raw_conn.cursor(cursor_factory=RealDictCursor)
+            try:
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+                
+                # Convert rows to list of dicts
+                for row in rows:
+                    row['ts'] = row['ts'].isoformat()
+                    logs.append(dict(row))
+            finally:
+                cur.close() # Explicitly close the cursor
+            # --- END FIX ---
+
+        # 6. Handle Pagination Logic
+        if len(logs) > limit:
+            logs.pop() # Remove the extra row
+            
+            last_row = rows[limit-1]
+            next_cursor = serialize_cursor(last_row['ts'], last_row['uid'])
+
+        return {"logs": logs, "next_cursor": next_cursor}
+
+    except Exception as e:
+        print(f"Keyset Query Failed: {e}")
+        # Re-raise the exception so the caller (the API route) knows it failed
+        raise e
