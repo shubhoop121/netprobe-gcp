@@ -32,7 +32,7 @@ resource "google_compute_instance_template" "nva" {
 
   service_account {
     # This is your project's Compute Engine default service account email
-    email  = "412150966753-compute@developer.gserviceaccount.com"
+    email  = google_service_account.api_sa.email
     # This scope grants the VM full access to all cloud APIs.
     # IAM roles will still be the final gatekeeper for what it can actually do.
     scopes = ["cloud-platform"]
