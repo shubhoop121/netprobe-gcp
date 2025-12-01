@@ -32,14 +32,16 @@ if ! grep -q "netprobe_dhcp" $ZEEK_SITE/local.zeek; then
     echo "@load netprobe_dhcp" | sudo tee -a $ZEEK_SITE/local.zeek
 fi
 
-# 3. Enable JA3 (TLS Fingerprinting) - Standard Package
-# This is usually pre-installed in Zeek LTS, we just need to load it.
-if ! grep -q "packages/ja3" $ZEEK_SITE/local.zeek; then
-    # Try loading standard ja3 location. If it fails, Zeek will just ignore/warn.
-    echo "@load protocols/ssl/ja3" | sudo tee -a $ZEEK_SITE/local.zeek
+echo "--- Installing JA3 Fingerprinting ---"
+sudo mkdir -p $ZEEK_SITE/packages/ja3
+sudo curl -s -o $ZEEK_SITE/packages/ja3/ja3.zeek https://raw.githubusercontent.com/salesforce/ja3/master/zeek/ja3.zeek
+
+# Load the specific file we just downloaded
+if ! grep -q "packages/ja3/ja3.zeek" $ZEEK_SITE/local.zeek; then
+    echo "@load packages/ja3/ja3.zeek" | sudo tee -a $ZEEK_SITE/local.zeek
 fi
 
-# --- FIX IS HERE: Use absolute path for zeekctl ---
+# --- Restart Zeek ---
 echo "--- Restarting Zeek to apply new scripts ---"
 sudo /opt/zeek/bin/zeekctl deploy
 
