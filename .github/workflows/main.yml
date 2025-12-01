@@ -11,6 +11,7 @@ env:
   REPO_ID: "netprobe-docker-repo"
   API_SERVICE_NAME: "netprobe-api"
   DASHBOARD_SERVICE_NAME: "netprobe-dashboard"
+  IDENTITY_SERVICE_NAME: "netprobe-identity-engine"
 
 jobs:
   # ======================================================================================
@@ -58,7 +59,7 @@ jobs:
         run: |
           docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.API_SERVICE_NAME }}:${{ github.sha }} ./apps/api
           docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.DASHBOARD_SERVICE_NAME }}:${{ github.sha }} ./apps/dashboard
-
+          docker build --no-cache -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.IDENTITY_SERVICE_NAME }}:${{ github.sha }} ./apps/identity-engine
   # ======================================================================================
   # JOB 2: DEPLOY INFRASTRUCTURE (Runs on Merge to main)
   # ======================================================================================
@@ -239,14 +240,57 @@ jobs:
             --service-account=netprobe-dashboard@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-env-vars="^::^API_TARGET_URL=${{ needs.deploy-api.outputs.api_url }}::API_AUDIENCE_URL=${{ needs.deploy-api.outputs.api_url }}" \
             --allow-unauthenticated
+            
+  # ======================================================================================
+  # JOB 5: DEPLOY IDENTITY ENGINE (Runs on Merge)
+  # ======================================================================================
+  deploy-identity-engine:
+    name: "Build and Deploy Identity Engine"
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: apply-infra 
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write"
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v2"
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          
+      - uses: "google-github-actions/setup-gcloud@v2"
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+      
+      - name: Build and Push Identity Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/identity-engine
+          push: true
+          tags: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.IDENTITY_SERVICE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: "Update Cloud Run Job"
+        run: |
+          # We use 'jobs update' because Terraform created the job already.
+          # This just swaps the image to the new code.
+          gcloud run jobs update ${{ env.IDENTITY_SERVICE_NAME }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_ID }}/${{ env.IDENTITY_SERVICE_NAME }}:${{ github.sha }} \
+            --region=${{ env.REGION }}
 
   # =====================================================================================
-  # JOB 5: VALIDATE DEPLOYMENT (Runs on Merge, after Apps are deployed)
+  # JOB 6: VALIDATE DEPLOYMENT (Runs on Merge, after Apps are deployed)
   # =====================================================================================
   validate:
     name: "Validate Deployment"
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [apply-infra, deploy-dashboard] 
+    needs: [apply-infra, deploy-api, deploy-dashboard, deploy-identity-engine] 
     runs-on: ubuntu-latest
     permissions:
       contents: "read" 

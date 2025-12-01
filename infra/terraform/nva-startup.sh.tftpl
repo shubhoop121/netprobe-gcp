@@ -22,6 +22,29 @@ GITHUB_PAT=$(gcloud secrets versions access latest --secret="github-pat" --proje
 sudo rm -rf /opt/netprobe
 sudo git clone -b ${branch_name} https://oauth2:$${GITHUB_PAT}@github.com/shubhoop121/netprobe-gcp.git /opt/netprobe
 
+echo "--- Configuring Custom Zeek Scripts ---"
+ZEEK_SITE="/opt/zeek/share/zeek/site"
+
+# 1. Copy our custom script to Zeek's site directory
+sudo cp /opt/netprobe/configs/zeek/netprobe_dhcp.zeek $ZEEK_SITE/
+
+# 2. Tell Zeek to load it by appending to local.zeek
+# We use 'grep' to ensure we don't add it twice on re-runs
+if ! grep -q "netprobe_dhcp" $ZEEK_SITE/local.zeek; then
+    echo "@load netprobe_dhcp" | sudo tee -a $ZEEK_SITE/local.zeek
+fi
+
+# 3. Enable JA3 (TLS Fingerprinting) - Standard Package
+# This is usually pre-installed in Zeek LTS, we just need to load it.
+if ! grep -q "packages/ja3" $ZEEK_SITE/local.zeek; then
+    # Try loading standard ja3 location. If it fails, Zeek will just ignore/warn.
+    echo "@load protocols/ssl/ja3" | sudo tee -a $ZEEK_SITE/local.zeek
+fi
+
+# We must restart Zeek so it reads the new 'local.zeek' config
+echo "--- Restarting Zeek to apply new scripts ---"
+sudo zeekctl deploy
+
 echo "--- Creating fresh systemd unit file with live secrets ---"
 # Create/Overwrite the shipper.service file with the new, live secrets.
 # This avoids using any "baked-in" config from the image.
