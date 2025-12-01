@@ -1,15 +1,13 @@
 #!/bin/bash
 #
-# This script assumes Zeek, Suricata, Python, and Git are pre-installed.
+# NetProbe NVA Startup Script (v4 - Fixed Paths)
+# This script assumes Zeek, Suricata, Python, and Git are pre-installed via Golden Image.
 #
 exec > >(sudo tee /var/log/startup-script.log) 2>&1
 set -e
 set -x
 
 echo "--- STARTING NVA (GOLDEN IMAGE) SCRIPT ---"
-echo "--- Ensuring core services are active ---"
-sudo systemctl restart zeek.service
-sudo systemctl restart suricata.service
 
 # --- PHASE 9: Deploy/Update Log Shipper (Dynamic) ---
 echo "--- PHASE 9: Deploying Log Shipper (Dynamic Config) ---"
@@ -41,9 +39,9 @@ if ! grep -q "packages/ja3" $ZEEK_SITE/local.zeek; then
     echo "@load protocols/ssl/ja3" | sudo tee -a $ZEEK_SITE/local.zeek
 fi
 
-# We must restart Zeek so it reads the new 'local.zeek' config
+# --- FIX IS HERE: Use absolute path for zeekctl ---
 echo "--- Restarting Zeek to apply new scripts ---"
-sudo zeekctl deploy
+sudo /opt/zeek/bin/zeekctl deploy
 
 echo "--- Creating fresh systemd unit file with live secrets ---"
 # Create/Overwrite the shipper.service file with the new, live secrets.
