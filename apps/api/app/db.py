@@ -165,3 +165,79 @@ def get_logs_keyset(limit=50, cursor=None, filters=None):
         print(f"Keyset Query Failed: {e}")
         # Re-raise the exception so the caller (the API route) knows it failed
         raise e
+
+def get_alerts_keyset(limit=50, cursor=None, filters=None):
+    """
+    High-Performance Alert Fetcher.
+    Targets the 'alerts' table using (timestamp, alert_id) for seeking.
+    """
+    pool = get_db()
+    
+    # 1. Parse the cursor
+    # We reuse the same serializer since the data types (datetime, string) match
+    cursor_ts, cursor_id = deserialize_cursor(cursor)
+
+    # 2. Base Query
+    sql = """
+        SELECT timestamp, alert_id, source_ip, destination_ip, 
+               signature, severity, details
+        FROM alerts
+        WHERE 1=1
+    """
+    params = {}
+
+    # 3. Apply Filters
+    if filters:
+        if filters.get('ip'):
+            sql += " AND (source_ip = %(ip)s OR destination_ip = %(ip)s)"
+            params['ip'] = filters['ip']
+        if filters.get('severity'):
+            sql += " AND severity = %(severity)s"
+            params['severity'] = filters['severity']
+    
+    # 4. Apply Seek Logic
+    if cursor_ts and cursor_id:
+        sql += " AND (timestamp, alert_id) < (%(cursor_ts)s, %(cursor_id)s)"
+        params['cursor_ts'] = cursor_ts
+        params['cursor_id'] = cursor_id
+
+    # 5. Order and Limit
+    sql += " ORDER BY timestamp DESC, alert_id DESC LIMIT %(limit)s"
+    params['limit'] = limit + 1
+
+    alerts = []
+    next_cursor = None
+
+    try:
+        with pool.connect() as conn:
+            raw_conn = conn.connection
+            cur = raw_conn.cursor(cursor_factory=RealDictCursor)
+            try:
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+                
+                for row in rows:
+                    # Convert to dict and format timestamp
+                    alert = dict(row)
+                    if alert.get('timestamp'):
+                        alert['timestamp'] = alert['timestamp'].isoformat()
+                    alerts.append(alert)
+            finally:
+                cur.close()
+
+        # 6. Handle Pagination
+        if len(alerts) > limit:
+            alerts.pop() # Remove extra row
+            
+            # Create cursor from the last real row
+            # Note: We must use the raw datetime object from the DB row, not the string we just made
+            # But since we didn't keep the raw rows separately, we can re-parse or just use the string
+            # The serializer handles strings fine now.
+            last_row = alerts[-1]
+            next_cursor = serialize_cursor(last_row['timestamp'], last_row['alert_id'])
+
+        return {"logs": alerts, "next_cursor": next_cursor}
+
+    except Exception as e:
+        print(f"Alert Query Failed: {e}")
+        raise e
