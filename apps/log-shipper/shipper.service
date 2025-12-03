@@ -11,7 +11,7 @@ Environment="DB_USER=netprobe_user"
 Environment="DB_PASSWORD="
 
 # The full path to the script after our git clone to /opt/netprobe
-ExecStart=/usr/bin/python3 /opt/netprobe/apps/log-shipper/shipper.py
+ExecStart=/usr/bin/python3 -u /opt/netprobe/apps/log-shipper/shipper.py
 
 # Automatically restart the service if it fails
 Restart=on-failure

@@ -26,12 +26,13 @@ if ! grep -q "netprobe_dhcp" $ZEEK_SITE/local.zeek; then
     echo "@load netprobe_dhcp" | sudo tee -a $ZEEK_SITE/local.zeek
 fi
 
-ZEEK_LOCAL="/opt/zeek/share/zeek/site/local.zeek"
+if ! grep -q "^@load packages" $ZEEK_SITE/local.zeek; then
+    echo "@load packages" | sudo tee -a $ZEEK_SITE/local.zeek
+fi
 
-# Ensure packages (JA4) are loaded
-if ! grep -q "^@load packages" $ZEEK_LOCAL; then
-    echo "--- Enabling Zeek Packages (JA4) ---"
-    echo "@load packages" | sudo tee -a $ZEEK_LOCAL
+echo "--- Installing mDNS Support ---"
+if ! sudo /opt/zeek/bin/zkg list | grep -q "mdns"; then
+    sudo /opt/zeek/bin/zkg install zeek/zeek-spec/mdns --force || echo "mDNS package install skipped/failed, relying on native support."
 fi
 
 echo "--- Restarting Zeek and Suricata ---"

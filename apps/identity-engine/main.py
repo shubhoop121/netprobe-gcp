@@ -1,6 +1,6 @@
 import os
-import sys
 import json
+import sys
 import logging
 import time
 import psycopg2
@@ -12,17 +12,15 @@ logger = logging.getLogger(__name__)
 
 # --- Database Connection ---
 def get_db_conn():
+    # ... (Keep your existing connection logic) ...
     if not os.environ.get("DB_PASSWORD"):
-        # Production: Fetch from Secret Manager
         project_id = os.environ.get("PROJECT_ID", "netprobe-473119")
         client = secretmanager.SecretManagerServiceClient()
         pwd_name = f"projects/{project_id}/secrets/db-password/versions/latest"
         ip_name = f"projects/{project_id}/secrets/db-private-ip-live/versions/latest"
-        
         password = client.access_secret_version(request={"name": pwd_name}).payload.data.decode("UTF-8").strip()
         host = client.access_secret_version(request={"name": ip_name}).payload.data.decode("UTF-8").strip()
     else:
-        # Local Dev
         password = os.environ.get("DB_PASSWORD")
         host = os.environ.get("DB_HOST")
 
@@ -33,12 +31,11 @@ def get_db_conn():
         password=password
     )
 
-# --- Core Logic: Sessionization (DHCP) ---
+# --- Core Logic: Identity Resolution (DHCP) ---
 def process_dhcp(conn):
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    
     logger.info("Scanning for new DHCP logs...")
-    # Fetch logs where service is 'dhcp'
+    
     cur.execute("""
         SELECT ts, source_ip, details 
         FROM connections 
@@ -52,28 +49,31 @@ def process_dhcp(conn):
     for log in logs:
         details = log.get('details', {})
         
-        # Match keys from shipper.py HEADERS['dhcp']
         mac = details.get('mac')
         hostname = details.get('host_name')
         vendor = details.get('fp_vendor_class')
+        # NEW: Extract Client ID (Option 61)
+        client_id = details.get('fp_client_id')
 
         if not mac: continue
 
         try:
             # 1. UPSERT Device
+            # We now also save the Client ID
             cur.execute("""
-                INSERT INTO devices (mac_address, friendly_name, last_seen)
-                VALUES (%s, %s, %s)
+                INSERT INTO devices (mac_address, friendly_name, client_id_opt61, last_seen)
+                VALUES (%s, %s, %s, %s)
                 ON CONFLICT (mac_address) DO UPDATE SET
                     friendly_name = COALESCE(EXCLUDED.friendly_name, devices.friendly_name),
+                    client_id_opt61 = COALESCE(EXCLUDED.client_id_opt61, devices.client_id_opt61),
                     last_seen = EXCLUDED.last_seen
                 RETURNING device_id
-            """, (mac, hostname, log['ts']))
+            """, (mac, hostname, client_id, log['ts']))
             
             device_id = cur.fetchone()['device_id']
 
-            # 2. Insert Vendor Fingerprint
-            if vendor:
+            # 2. Vendor Fingerprint
+            if vendor and vendor != '-':
                 cur.execute("""
                     INSERT INTO device_fingerprints (device_id, fingerprint_type, fingerprint_value, last_seen)
                     VALUES (%s, 'vendor_class', %s, %s)
@@ -81,8 +81,7 @@ def process_dhcp(conn):
                     DO UPDATE SET last_seen = EXCLUDED.last_seen
                 """, (device_id, vendor, log['ts']))
 
-            # 3. Update IP History (Time Travel)
-            # Close old leases
+            # 3. Time Travel (IP History)
             cur.execute("""
                 UPDATE ip_history 
                 SET validity_range = tstzrange(lower(validity_range), %s)
@@ -91,7 +90,6 @@ def process_dhcp(conn):
                   AND device_id != %s
             """, (log['ts'], log['source_ip'], device_id))
 
-            # Open new lease
             cur.execute("""
                 INSERT INTO ip_history (device_id, ip_address, validity_range)
                 VALUES (%s, %s, tstzrange(%s, NULL))
@@ -105,20 +103,84 @@ def process_dhcp(conn):
             continue
 
     conn.commit()
-    logger.info(f"Processed {len(logs)} DHCP logs. Updated {updates} devices.")
+    logger.info(f"DHCP: Processed {len(logs)} logs. Updated {updates} devices.")
+
+def process_secondary_names(conn):
+    """
+    Scans NTLM and mDNS logs to find hostnames for devices that hid them in DHCP.
+    """
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    logger.info("Scanning for Secondary Names (NTLM/mDNS)...")
+
+    # Look for NTLM (Windows Names) or DNS (mDNS .local names)
+    cur.execute("""
+        SELECT ts, source_ip, service, details
+        FROM connections
+        WHERE service IN ('ntlm', 'dns')
+          AND ts > (NOW() - INTERVAL '20 minutes')
+    """)
+    logs = cur.fetchall()
+    
+    updates = 0
+    for log in logs:
+        details = log.get('details', {})
+        found_name = None
+        source_type = None
+
+        # NTLM Extraction
+        if log['service'] == 'ntlm':
+            found_name = details.get('hostname')
+            source_type = 'NTLM'
+
+        # mDNS Extraction (Zeek dns.log)
+        elif log['service'] == 'dns':
+            query = details.get('query', '')
+            if query and query.endswith('.local'):
+                found_name = query
+                source_type = 'mDNS'
+
+        # Guard clause: Skip if name empty OR source_type undefined
+        if not found_name or found_name == '-' or not source_type: 
+            continue
+
+        try:
+            # Find who had this IP at this time
+            cur.execute("""
+                SELECT device_id FROM ip_history 
+                WHERE ip_address = %s 
+                  AND validity_range @> %s::timestamptz
+                LIMIT 1
+            """, (log['source_ip'], log['ts']))
+            
+            match = cur.fetchone()
+            if match:
+                # Update the device name if it's currently empty or generic
+                cur.execute("""
+                    UPDATE devices 
+                    SET current_hostname = %s, hostname_source = %s
+                    WHERE device_id = %s 
+                      AND (current_hostname IS NULL OR current_hostname = '')
+                """, (found_name, source_type, match['device_id']))
+                
+                if cur.rowcount > 0:
+                    updates += 1
+        except Exception as e:
+            continue
+
+    conn.commit()
+    # FIX: Removed {source_type} variable from here to avoid UnboundLocalError
+    logger.info(f"Names: Found {updates} new hostnames via NTLM/mDNS.")
 
 # --- Core Logic: Fingerprinting (HTTP & SSL) ---
 def process_traffic_fingerprints(conn):
     cur = conn.cursor(cursor_factory=RealDictCursor)
     logger.info("Scanning for HTTP/SSL fingerprints...")
 
-    # We look for HTTP (User-Agent) OR SSL (JA3)
-    # Using the single 'connections' stream
     cur.execute("""
         SELECT ts, source_ip, service, details
         FROM connections
         WHERE service IN ('http', 'ssl')
-          AND ts > (NOW() - INTERVAL '15 minutes')
+          AND ts > (NOW() - INTERVAL '20 minutes')
     """)
     logs = cur.fetchall()
     
@@ -128,17 +190,15 @@ def process_traffic_fingerprints(conn):
         fingerprint_type = None
         fingerprint_value = None
 
-        # Extract based on protocol
         if log['service'] == 'http':
             fingerprint_value = details.get('user_agent')
             fingerprint_type = 'user_agent'
         elif log['service'] == 'ssl':
-            fingerprint_value = details.get('ja3')
-            fingerprint_type = 'ja3'
+            fingerprint_value = details.get('ja4') 
+            fingerprint_type = 'ja4'
 
-        if not fingerprint_value: continue
+        if not fingerprint_value or fingerprint_value == '-': continue
 
-        # Correlate IP -> Device ID using Time Travel
         try:
             cur.execute("""
                 SELECT device_id FROM ip_history 
@@ -149,7 +209,6 @@ def process_traffic_fingerprints(conn):
             
             match = cur.fetchone()
             if match:
-                # Found the device! Link the fingerprint.
                 cur.execute("""
                     INSERT INTO device_fingerprints (device_id, fingerprint_type, fingerprint_value, last_seen)
                     VALUES (%s, %s, %s, %s)
@@ -157,24 +216,19 @@ def process_traffic_fingerprints(conn):
                     DO UPDATE SET last_seen = EXCLUDED.last_seen
                 """, (match['device_id'], fingerprint_type, fingerprint_value, log['ts']))
                 count += 1
-        except Exception as e:
-            logger.error(f"Error processing fingerprint: {e}")
+        except Exception:
             continue
     
     conn.commit()
-    logger.info(f"Correlated {count} new fingerprints (User-Agent/JA3).")
+    logger.info(f"Fingerprints: Correlated {count} new items.")
 
 if __name__ == "__main__":
     try:
         logger.info("--- Identity Engine Starting ---")
         conn = get_db_conn()
-        
-        # 1. Establish Identity (DHCP)
         process_dhcp(conn)
-        
-        # 2. Enrich Identity (HTTP/SSL)
+        process_secondary_names(conn) # Run the new logic
         process_traffic_fingerprints(conn)
-        
         conn.close()
         logger.info("--- Identity Engine Finished ---")
     except Exception as e:
