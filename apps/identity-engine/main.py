@@ -61,25 +61,25 @@ def process_dhcp(conn):
             # 1. UPSERT Device
             # We now also save the Client ID
             cur.execute("""
-                INSERT INTO devices (mac_address, friendly_name, client_id_opt61, last_seen)
+                INSERT INTO devices (primary_mac, friendly_name, client_id_opt61, last_seen)
                 VALUES (%s, %s, %s, %s)
-                ON CONFLICT (mac_address) DO UPDATE SET
+                ON CONFLICT (primary_mac) DO UPDATE SET
                     friendly_name = COALESCE(EXCLUDED.friendly_name, devices.friendly_name),
                     client_id_opt61 = COALESCE(EXCLUDED.client_id_opt61, devices.client_id_opt61),
                     last_seen = EXCLUDED.last_seen
-                RETURNING device_id
+                RETURNING device_uuid
             """, (mac, hostname, client_id, log['ts']))
             
-            device_id = cur.fetchone()['device_id']
+            device_uuid = cur.fetchone()['device_uuid']
 
             # 2. Vendor Fingerprint
             if vendor and vendor != '-':
                 cur.execute("""
-                    INSERT INTO device_fingerprints (device_id, fingerprint_type, fingerprint_value, last_seen)
+                    INSERT INTO device_fingerprints (device_uuid, fingerprint_type, fingerprint_value, last_seen)
                     VALUES (%s, 'vendor_class', %s, %s)
-                    ON CONFLICT (device_id, fingerprint_type, fingerprint_value) 
+                    ON CONFLICT (device_uuid, fingerprint_type, fingerprint_value) 
                     DO UPDATE SET last_seen = EXCLUDED.last_seen
-                """, (device_id, vendor, log['ts']))
+                """, (device_uuid, vendor, log['ts']))
 
             # 3. Time Travel (IP History)
             cur.execute("""
@@ -87,14 +87,14 @@ def process_dhcp(conn):
                 SET validity_range = tstzrange(lower(validity_range), %s)
                 WHERE ip_address = %s 
                   AND upper(validity_range) IS NULL
-                  AND device_id != %s
-            """, (log['ts'], log['source_ip'], device_id))
+                  AND device_uuid != %s
+            """, (log['ts'], log['source_ip'], device_uuid))
 
             cur.execute("""
-                INSERT INTO ip_history (device_id, ip_address, validity_range)
+                INSERT INTO ip_history (device_uuid, ip_address, validity_range)
                 VALUES (%s, %s, tstzrange(%s, NULL))
                 ON CONFLICT DO NOTHING
-            """, (device_id, log['source_ip'], log['ts']))
+            """, (device_uuid, log['source_ip'], log['ts']))
             
             updates += 1
         except Exception as e:
@@ -146,7 +146,7 @@ def process_secondary_names(conn):
         try:
             # Find who had this IP at this time
             cur.execute("""
-                SELECT device_id FROM ip_history 
+                SELECT device_uuid FROM ip_history 
                 WHERE ip_address = %s 
                   AND validity_range @> %s::timestamptz
                 LIMIT 1
@@ -158,9 +158,9 @@ def process_secondary_names(conn):
                 cur.execute("""
                     UPDATE devices 
                     SET current_hostname = %s, hostname_source = %s
-                    WHERE device_id = %s 
+                    WHERE device_uuid = %s 
                       AND (current_hostname IS NULL OR current_hostname = '')
-                """, (found_name, source_type, match['device_id']))
+                """, (found_name, source_type, match['device_uuid']))
                 
                 if cur.rowcount > 0:
                     updates += 1
@@ -180,7 +180,7 @@ def process_traffic_fingerprints(conn):
         SELECT ts, source_ip, service, details
         FROM connections
         WHERE service IN ('http', 'ssl')
-          AND ts > (NOW() - INTERVAL '20 minutes')
+          AND ts > (NOW() - INTERVAL '24 HOURS')
     """)
     logs = cur.fetchall()
     
@@ -201,7 +201,7 @@ def process_traffic_fingerprints(conn):
 
         try:
             cur.execute("""
-                SELECT device_id FROM ip_history 
+                SELECT device_uuid FROM ip_history 
                 WHERE ip_address = %s 
                   AND validity_range @> %s::timestamptz
                 LIMIT 1
@@ -210,11 +210,11 @@ def process_traffic_fingerprints(conn):
             match = cur.fetchone()
             if match:
                 cur.execute("""
-                    INSERT INTO device_fingerprints (device_id, fingerprint_type, fingerprint_value, last_seen)
+                    INSERT INTO device_fingerprints (device_uuid, fingerprint_type, fingerprint_value, last_seen)
                     VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (device_id, fingerprint_type, fingerprint_value) 
+                    ON CONFLICT (device_uuid, fingerprint_type, fingerprint_value) 
                     DO UPDATE SET last_seen = EXCLUDED.last_seen
-                """, (match['device_id'], fingerprint_type, fingerprint_value, log['ts']))
+                """, (match['device_uuid'], fingerprint_type, fingerprint_value, log['ts']))
                 count += 1
         except Exception:
             continue
