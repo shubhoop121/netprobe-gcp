@@ -14,6 +14,33 @@ env:
   IDENTITY_SERVICE_NAME: "netprobe-identity-engine"
 
 jobs:
+  # ------------------------------------------------
+  # JOB 0: DETECT FILE CHANGES
+  # ------------------------------------------------
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      infra: ${{ steps.filter.outputs.infra }}
+      api: ${{ steps.filter.outputs.api }}
+      dashboard: ${{ steps.filter.outputs.dashboard }}
+      identity: ${{ steps.filter.outputs.identity }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: |
+          infra:
+            - 'infra/**'
+            - '.github/workflows/**'
+          api:
+            - 'apps/api/**'
+          dashboard:
+            - 'apps/dashboard/**'
+          identity:
+            - 'apps/identity-engine/**'
+            
+jobs:
   # ======================================================================================
   # JOB 1: RUNS ON PULL REQUESTS
   # ======================================================================================
@@ -65,7 +92,7 @@ jobs:
   # ======================================================================================
   apply-infra:
     name: "Deploy Infrastructure"
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (needs.changes.outputs.infra == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: "read"
@@ -138,7 +165,7 @@ jobs:
   # ======================================================================================
   deploy-api:
     name: "Build and Deploy API"
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: always() && github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.infra == 'true')    
     needs: apply-infra 
     runs-on: ubuntu-latest
     permissions:
@@ -201,7 +228,7 @@ jobs:
   # ======================================================================================
   deploy-dashboard:
     name: "Build and Deploy Dashboard"
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: always() && github.ref == 'refs/heads/main' && (needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.infra == 'true')
     needs: deploy-api 
     runs-on: ubuntu-latest
     permissions:
@@ -246,8 +273,7 @@ jobs:
   # ======================================================================================
   deploy-identity-engine:
     name: "Build and Deploy Identity Engine"
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: apply-infra 
+    if: always() && github.ref == 'refs/heads/main' && (needs.changes.outputs.identity == 'true' || needs.changes.outputs.infra == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: "read"
@@ -289,7 +315,7 @@ jobs:
   # =====================================================================================
   validate:
     name: "Validate Deployment"
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: always() && needs.apply-infra.result == 'success'
     needs: [apply-infra, deploy-api, deploy-dashboard, deploy-identity-engine] 
     runs-on: ubuntu-latest
     permissions:

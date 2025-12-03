@@ -61,10 +61,10 @@ def process_dhcp(conn):
             # 1. UPSERT Device
             # We now also save the Client ID
             cur.execute("""
-                INSERT INTO devices (primary_mac, friendly_name, client_id_opt61, last_seen)
+                INSERT INTO devices (primary_mac, current_hostname, client_id_opt61, last_seen)
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (primary_mac) DO UPDATE SET
-                    friendly_name = COALESCE(EXCLUDED.friendly_name, devices.friendly_name),
+                    current_hostname = COALESCE(EXCLUDED.current_hostname, devices.current_hostname),
                     client_id_opt61 = COALESCE(EXCLUDED.client_id_opt61, devices.client_id_opt61),
                     last_seen = EXCLUDED.last_seen
                 RETURNING device_uuid
