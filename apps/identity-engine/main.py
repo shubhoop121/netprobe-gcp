@@ -40,7 +40,7 @@ def process_dhcp(conn):
         SELECT ts, source_ip, details 
         FROM connections 
         WHERE service = 'dhcp' 
-          AND ts > (NOW() - INTERVAL '20 minutes')
+          AND ts > (NOW() - INTERVAL '24 HOURS')
         ORDER BY ts ASC
     """)
     logs = cur.fetchall()
