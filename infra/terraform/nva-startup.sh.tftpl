@@ -26,7 +26,13 @@ if ! grep -q "netprobe_dhcp" $ZEEK_SITE/local.zeek; then
     echo "@load netprobe_dhcp" | sudo tee -a $ZEEK_SITE/local.zeek
 fi
 
-# NOTE: JA4, SMB, NTLM are already enabled in local.zeek by the Golden Image.
+ZEEK_LOCAL="/opt/zeek/share/zeek/site/local.zeek"
+
+# Ensure packages (JA4) are loaded
+if ! grep -q "^@load packages" $ZEEK_LOCAL; then
+    echo "--- Enabling Zeek Packages (JA4) ---"
+    echo "@load packages" | sudo tee -a $ZEEK_LOCAL
+fi
 
 echo "--- Restarting Zeek and Suricata ---"
 sudo /opt/zeek/bin/zeekctl deploy
