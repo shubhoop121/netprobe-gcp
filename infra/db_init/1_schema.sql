@@ -68,16 +68,17 @@ END $$;
 -- =======================================================================
 -- 3. INTELLIGENCE TABLES (Research v2.1 Compliant)
 -- =======================================================================
-
--- DEVICES: The Asset Inventory
--- Switched to UUID to handle complex merges/splits
+DROP TABLE IF EXISTS device_fingerprints; -- Must drop child first
+DROP TABLE IF EXISTS ip_history;          -- Must drop child first
+DROP TABLE IF EXISTS devices;
+-- DEVICES: The stable entity (Anchored by MAC)
 CREATE TABLE IF NOT EXISTS devices (
     device_uuid UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     
-    -- The "Hard Anchors" [Research 5.1]
+    -- The "Hard Anchors"
     primary_mac MACADDR, 
     duid TEXT,              -- IPv6 Long-term anchor
-    client_id_opt61 TEXT,   -- Windows Long-term anchor
+    client_id_opt61 TEXT,   -- Windows Long-term anchor (THE MISSING COLUMN)
     
     -- Derived Attributes
     current_hostname TEXT,
@@ -91,15 +92,15 @@ CREATE TABLE IF NOT EXISTS devices (
     first_seen TIMESTAMPTZ DEFAULT NOW(),
     last_seen TIMESTAMPTZ DEFAULT NOW(),
     
-    UNIQUE(primary_mac) -- Soft constraint, logic handles randomization
+    UNIQUE(primary_mac)
 );
 
--- FINGERPRINTS: Evidence Store
+-- FINGERPRINTS: Attributes linked to a device
 CREATE TABLE IF NOT EXISTS device_fingerprints (
     fingerprint_id BIGSERIAL PRIMARY KEY,
     device_uuid UUID REFERENCES devices(device_uuid) ON DELETE CASCADE,
     
-    fingerprint_type TEXT NOT NULL, -- 'ja4', 'user-agent', 'dhcp_param_list'
+    fingerprint_type TEXT NOT NULL, 
     fingerprint_value TEXT NOT NULL,
     
     first_seen TIMESTAMPTZ DEFAULT NOW(),
@@ -108,14 +109,13 @@ CREATE TABLE IF NOT EXISTS device_fingerprints (
     UNIQUE (device_uuid, fingerprint_type, fingerprint_value)
 );
 
--- IP HISTORY: Time Travel
+-- IP HISTORY: The "Time Travel" table
 CREATE TABLE IF NOT EXISTS ip_history (
     history_id BIGSERIAL PRIMARY KEY,
     device_uuid UUID REFERENCES devices(device_uuid) ON DELETE CASCADE,
     ip_address INET NOT NULL,
     validity_range TSTZRANGE NOT NULL,
     
-    -- Exclusion constraint: No two devices can hold the same IP at the same time
     EXCLUDE USING GIST (
         ip_address WITH =,
         validity_range WITH &&
