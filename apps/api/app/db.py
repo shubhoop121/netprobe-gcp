@@ -104,7 +104,7 @@ def get_logs_keyset(limit=50, cursor=None, filters=None):
     # 2. Base Query
     sql = """
         SELECT ts, uid, source_ip, source_port, destination_ip, destination_port, 
-               proto, service, duration, conn_state
+               proto, service, duration, conn_state, details
         FROM connections
         WHERE 1=1
     """
