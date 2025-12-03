@@ -51,3 +51,11 @@ resource "google_cloud_scheduler_job" "identity_trigger" {
     }
   }
 }
+
+resource "google_cloud_run_v2_job_iam_member" "scheduler_invoker" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_job.identity_engine.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.api_sa.email}"
+}

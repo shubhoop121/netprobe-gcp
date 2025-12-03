@@ -9,16 +9,6 @@ from .db import get_db, get_logs_keyset, get_alerts_keyset
 logger = logging.getLogger(__name__)
 bp = Blueprint('main', __name__, url_prefix='/v1') # Prefix is /v1 (Proxy handles /api)
 
-def _serialize_row(row):
-    """ Helper to convert a SQLAlchemy row to a JSON-friendly dict """
-    d = dict(row)
-    for key, value in d.items():
-        if hasattr(value, 'isoformat'): # Converts datetimes
-            d[key] = value.isoformat()
-        elif hasattr(value, 'addr'): # Converts INET addresses
-            d[key] = str(value)
-    return d
-
 # --- DASHBOARD STATS ---
 @bp.route('/stats', methods=['GET'])
 def get_stats():
@@ -130,11 +120,12 @@ def get_devices():
             for row in result:
                 d = row._asdict()
                 
-                # Handle null fingerprints (json_agg returns [null] if no match)
-                if d['fingerprints'] == [None]: 
-                    d['fingerprints'] = []
+                raw_fingerprints = d['fingerprints']
+                d['fingerprints'] = [
+                    fp for fp in raw_fingerprints 
+                    if fp and fp.get('type') is not None
+                ]
                 
-                # Serialize UUID and Datetime for JSON
                 d['device_uuid'] = str(d['device_uuid'])
                 d['last_seen'] = d['last_seen'].isoformat() if d['last_seen'] else None
                 
