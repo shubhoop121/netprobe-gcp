@@ -71,6 +71,9 @@ def get_connections():
         filters = {}
         if request.args.get('ip'):
             filters['ip'] = request.args.get('ip')
+        
+        if request.args.get('service'):
+            filters['service'] = request.args.get('service')
 
         # 2. Call the DB Engine
         result = get_logs_keyset(limit=limit, cursor=cursor, filters=filters)

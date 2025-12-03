@@ -115,6 +115,9 @@ def get_logs_keyset(limit=50, cursor=None, filters=None):
         if filters.get('ip'):
             sql += " AND (source_ip = %(ip)s OR destination_ip = %(ip)s)"
             params['ip'] = filters['ip']
+        if filters.get('service'):
+            sql += " AND service = %(service)s"
+            params['service'] = filters['service']
     
     # 4. Apply the Seek Logic
     if cursor_ts and cursor_uid:
