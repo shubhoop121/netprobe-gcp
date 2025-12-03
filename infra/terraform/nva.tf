@@ -16,7 +16,7 @@ resource "google_compute_instance_template" "nva" {
   }
 
   disk {
-    source_image = "global/images/netprobe-nva-golden-image-v3"
+    source_image = "global/images/netprobe-nva-golden-image-v4"
     auto_delete  = true
     boot         = true
   }

@@ -30,7 +30,7 @@ resource "google_compute_security_policy" "main" {
       versioned_expr = "SRC_IPS_V1"
       config {
         # KEEP YOUR ACTUAL IP HERE!
-        src_ip_ranges = ["35.197.151.181/32"]
+        src_ip_ranges = ["35.240.187.227/32"]
         
       }
     }

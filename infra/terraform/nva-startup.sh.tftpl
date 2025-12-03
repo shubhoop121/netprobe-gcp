@@ -1,61 +1,46 @@
 #!/bin/bash
-#
-# NetProbe NVA Startup Script (v4 - Fixed Paths)
-# This script assumes Zeek, Suricata, Python, and Git are pre-installed via Golden Image.
-#
+# Assumes: Zeek, Suricata, JA4+, and Python Libs are pre-installed.
+
 exec > >(sudo tee /var/log/startup-script.log) 2>&1
 set -e
 set -x
 
-echo "--- STARTING NVA (GOLDEN IMAGE) SCRIPT ---"
+echo "--- STARTING NVA RUNTIME CONFIG ---"
 
-# --- PHASE 9: Deploy/Update Log Shipper (Dynamic) ---
-echo "--- PHASE 9: Deploying Log Shipper (Dynamic Config) ---"
-
-# Fetch live secrets
+# 1. Fetch Secrets
 DB_PASS=$(gcloud secrets versions access latest --secret="db-password" --project="${project_id}")
 GITHUB_PAT=$(gcloud secrets versions access latest --secret="github-pat" --project="${project_id}")
 
-# Nuke the old code directory (if it exists) and clone the fresh branch
+# 2. Clone Latest Application Code
 sudo rm -rf /opt/netprobe
 sudo git clone -b ${branch_name} https://oauth2:$${GITHUB_PAT}@github.com/shubhoop121/netprobe-gcp.git /opt/netprobe
 
-echo "--- Configuring Custom Zeek Scripts ---"
+# 3. Configure Zeek (Inject Custom Scripts)
 ZEEK_SITE="/opt/zeek/share/zeek/site"
 
-# 1. Copy our custom script to Zeek's site directory
+# Copy our custom DHCP script
 sudo cp /opt/netprobe/configs/zeek/netprobe_dhcp.zeek $ZEEK_SITE/
 
-# 2. Tell Zeek to load it by appending to local.zeek
-# We use 'grep' to ensure we don't add it twice on re-runs
+# Load it
 if ! grep -q "netprobe_dhcp" $ZEEK_SITE/local.zeek; then
     echo "@load netprobe_dhcp" | sudo tee -a $ZEEK_SITE/local.zeek
 fi
 
-echo "--- Installing JA3 Fingerprinting ---"
-sudo mkdir -p $ZEEK_SITE/packages/ja3
-sudo curl -s -o $ZEEK_SITE/packages/ja3/ja3.zeek https://raw.githubusercontent.com/salesforce/ja3/master/zeek/ja3.zeek
+# NOTE: JA4, SMB, NTLM are already enabled in local.zeek by the Golden Image.
 
-# Load the specific file we just downloaded
-if ! grep -q "packages/ja3/ja3.zeek" $ZEEK_SITE/local.zeek; then
-    echo "@load packages/ja3/ja3.zeek" | sudo tee -a $ZEEK_SITE/local.zeek
-fi
-
-# --- Restart Zeek ---
-echo "--- Restarting Zeek to apply new scripts ---"
+echo "--- Restarting Zeek and Suricata ---"
 sudo /opt/zeek/bin/zeekctl deploy
+sudo systemctl restart suricata
+# ---------------------------------------
 
-echo "--- Creating fresh systemd unit file with live secrets ---"
-# Create/Overwrite the shipper.service file with the new, live secrets.
-# This avoids using any "baked-in" config from the image.
+# 4. Configure & Restart Shipper
+echo "--- Configuring Log Shipper ---"
 sudo sed -e "s/Environment=\"DB_NAME=\"/Environment=\"DB_NAME=netprobe_logs\"/" \
     -e "s/Environment=\"DB_USER=\"/Environment=\"DB_USER=netprobe_user\"/" \
     -e "s/Environment=\"DB_PASSWORD=\"/Environment=\"DB_PASSWORD=$${DB_PASS}\"/" \
     /opt/netprobe/apps/log-shipper/shipper.service > /etc/systemd/system/shipper.service
 
-# Reload and restart the service to apply the new code and config
-echo "--- Reloading and restarting shipper service ---"
 sudo systemctl daemon-reload
 sudo systemctl restart shipper.service
 
-echo "--- NVA PROVISIONING SCRIPT FINISHED SUCCESSFULLY ---"
+echo "--- RUNTIME CONFIG COMPLETE ---"
