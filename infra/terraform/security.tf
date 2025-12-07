@@ -20,23 +20,21 @@ resource "google_compute_security_policy" "api_security_policy" {
   description = "Public API policy with Active Defense (Cloud Armor)"
 
   # --- RULE 1: DYNAMIC BLOCKLIST (Highest Priority) ---
-  # This runs FIRST. If an IP is in the group, it is dropped immediately.
-  # Action: 403 Forbidden
+  # FIX: Use 'config' block. Cloud Armor accepts Address Group IDs 
+  # directly in the src_ip_ranges list.
   rule {
     action   = "deny(403)"
     priority = 500
     match {
-      expr {
-        # This expression checks if the incoming IP exists inside our Address Group
-        expression = "inIpRange(origin.ip, '${google_network_security_address_group.global_blocklist.id}')"
+      versioned_expr = "SRC_IPS_V1"
+      config {
+        src_ip_ranges = [google_network_security_address_group.global_blocklist.id]
       }
     }
     description = "Active Defense: Block specific attackers"
   }
 
   # --- RULE 2: ALLOW ADMINS (Safety Net) ---
-  # Ensures your Cloud Shell / Home IP is explicitly allowed.
-  # (Less critical now that Default is Allow, but good practice)
   rule {
     action   = "allow"
     priority = 900
@@ -50,8 +48,6 @@ resource "google_compute_security_policy" "api_security_policy" {
   }
 
   # --- RULE 3: DEFAULT ALLOW (Public Access) ---
-  # We OPEN the gates so the Red Team attacker can connect initially.
-  # They will only be blocked if Rule 1 catches them.
   rule {
     action   = "allow"
     priority = 2147483647

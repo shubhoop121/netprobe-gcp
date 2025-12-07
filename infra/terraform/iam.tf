@@ -115,6 +115,6 @@ resource "google_service_account_iam_member" "dashboard_sa_token_creator" {
 # Allows the API to add/remove IPs from the Address Group
 resource "google_project_iam_member" "api_sa_network_security" {
   project = var.project_id
-  role    = "roles/networksecurity.addressGroupEditor"
+  role    = "roles/networksecurity.admin"
   member  = google_service_account.api_sa.member
 }
