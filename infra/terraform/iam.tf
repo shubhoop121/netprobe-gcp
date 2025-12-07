@@ -88,7 +88,7 @@ resource "google_service_account_iam_member" "github_actas_dashboard" {
   member             = "serviceAccount:github-actions-sa@netprobe-473119.iam.gserviceaccount.com"
 }
 
-# --- 'TokenCreator' bindings (THE MISSING PIECE) ---
+# --- 'TokenCreator' bindings ---
 
 resource "google_service_account_iam_member" "github_token_creator_api" {
   service_account_id = google_service_account.api_sa.name
@@ -107,4 +107,14 @@ resource "google_service_account_iam_member" "dashboard_sa_token_creator" {
   role               = "roles/iam.serviceAccountTokenCreator"
   
   member             = google_service_account.dashboard_sa.member
+}
+
+# -----------------------------------------------------------------
+#  GRANT PERMISSIONS FOR CLOUD ARMOR (Active Response)
+# -----------------------------------------------------------------
+# Allows the API to add/remove IPs from the Address Group
+resource "google_project_iam_member" "api_sa_network_security" {
+  project = var.project_id
+  role    = "roles/networksecurity.addressGroupEditor"
+  member  = google_service_account.api_sa.member
 }

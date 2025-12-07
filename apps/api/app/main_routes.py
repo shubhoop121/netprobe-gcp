@@ -5,6 +5,7 @@ import base64
 import json
 from flask import Blueprint, jsonify, request
 from .db import get_db, get_logs_keyset, get_alerts_keyset
+from .cloud_armor import block_ip_in_armor
 
 logger = logging.getLogger(__name__)
 bp = Blueprint('main', __name__, url_prefix='/v1') # Prefix is /v1 (Proxy handles /api)
@@ -134,4 +135,44 @@ def get_devices():
             return jsonify({"devices": devices}), 200
     except Exception as e:
         logger.error(f"Device fetch failed: {e}", exc_info=True)
+        return jsonify(error=str(e)), 500
+
+# --- ACTIVE RESPONSE (The Block Button) ---
+@bp.route('/actions/block-ip', methods=['POST'])
+def block_ip():
+    """
+    1. Blocks IP in Google Cloud Armor (Real).
+    2. Logs the action to DB for audit.
+    """
+    logger.info("--- POST /api/v1/actions/block-ip ---")
+    try:
+        data = request.get_json()
+        if not data or 'ip' not in data:
+            return jsonify(error="Missing 'ip' field"), 400
+
+        ip_to_block = data['ip']
+        reason = data.get('reason', 'Manual Block via Dashboard')
+        user = data.get('user', 'admin') # In real app, get from session
+
+        # 1. Call Cloud Armor (The Real Weapon)
+        armor_result = block_ip_in_armor(ip_to_block)
+
+        # 2. Log to Database (The Audit Trail)
+        pool = get_db()
+        with pool.connect() as conn:
+            conn.execute(sqlalchemy.text("""
+                INSERT INTO blocked_ips (ip_address, blocked_by, reason)
+                VALUES (:ip, :user, :reason)
+                ON CONFLICT (ip_address) DO UPDATE 
+                SET blocked_at = NOW(), reason = :reason
+            """), {"ip": ip_to_block, "user": user, "reason": reason})
+            conn.commit()
+
+        return jsonify({
+            "message": f"IP {ip_to_block} blocked successfully",
+            "armor_status": armor_result
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Block IP failed: {e}", exc_info=True)
         return jsonify(error=str(e)), 500

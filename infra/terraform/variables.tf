@@ -32,3 +32,9 @@ variable "app_version" {
   description = "The git commit SHA of the application code to trigger NVA updates."
   type        = string
 }
+
+variable "allowed_source_ranges" {
+  description = "List of admin IPs allowed to bypass the blocklist (e.g., your home IP/Cloud Shell)"
+  type        = list(string)
+  default     = ["0.0.0.0/0", "35.247.137.215/32"] # Default to allow all for the demo to prevent errors
+}
