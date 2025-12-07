@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FaExclamationTriangle, FaBan } from 'react-icons/fa';
+import { FaExclamationTriangle, FaBan, FaCheckCircle } from 'react-icons/fa'; // Added FaCheckCircle
 import axios from 'axios';
 import './LiveAlertFeed.css';
 
@@ -10,10 +10,10 @@ interface Alert {
   severity: number | string;
   message: string;
   signature?: string;
-  source_ip: string; // Ensure this exists
+  source_ip: string;
 }
 
-// Severity config (1=High, 2=Medium, 3=Low)
+// Severity config
 const severityConfig: Record<number, { icon: string; bg: string; label: string }> = {
   1: { icon: 'icon-high', bg: 'bg-high', label: 'High Severity Alert' },
   2: { icon: 'icon-medium', bg: 'bg-medium', label: 'Medium Severity Alert' },
@@ -23,25 +23,24 @@ const severityConfig: Record<number, { icon: string; bg: string; label: string }
 export default function LiveAlertFeed() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [blockingIp, setBlockingIp] = useState<string | null>(null);
+  // NEW: Keep track of IPs blocked during this session
+  const [blockedHistory, setBlockedHistory] = useState<Set<string>>(new Set());
 
-  // Function to handle blocking an IP
   const handleBlockIp = async (ip: string) => {
-    if (!ip || ip === 'Unknown') {
-      alert("Cannot block: Invalid IP address");
-      return;
-    }
-
-    if (!confirm(`Are you sure you want to block IP: ${ip}?`)) {
-      return;
-    }
+    if (!ip || ip === 'Unknown') return;
+    if (!confirm(`Are you sure you want to block IP: ${ip}?`)) return;
 
     setBlockingIp(ip);
     try {
       await axios.post('/api/v1/actions/block-ip', {
         ip: ip,
         reason: 'Blocked via Live Alert Feed',
-        user: 'current-user' // Replace with auth context if you have it
+        user: 'current-user'
       });
+      
+      // NEW: Add to local blocked history on success
+      setBlockedHistory(prev => new Set(prev).add(ip));
+      
       alert(`Success: IP ${ip} has been blocked.`);
     } catch (err: any) {
       console.error('Block IP failed', err);
@@ -52,7 +51,6 @@ export default function LiveAlertFeed() {
     }
   };
 
-  // Fetch alerts from Flask API
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
@@ -70,14 +68,12 @@ export default function LiveAlertFeed() {
           })(),
           message: item.signature ?? item.message ?? 'No details available',
           signature: item.signature,
-          // Robustly attempt to find the source IP field
           source_ip: item.source_ip ?? item.src_ip ?? item.ip ?? 'Unknown' 
         })) as Alert[];
 
         setAlerts(data.slice(0, 20));
       } catch (err) {
         console.error('Error fetching alerts:', err);
-        setAlerts([]);
       }
     };
 
@@ -94,13 +90,14 @@ export default function LiveAlertFeed() {
 
       <div className="alert-feed-container flex-1 overflow-y-auto p-2">
         {alerts.length === 0 ? (
-          <div className="px-6 py-8 text-center text-gray-500">
-            No alerts at this time
-          </div>
+          <div className="px-6 py-8 text-center text-gray-500">No alerts at this time</div>
         ) : (
           alerts.map((alert) => {
             const sev = Number(alert.severity) || 3;
             const config = severityConfig[sev] ?? severityConfig[3];
+            
+            // NEW: Check if this IP was just blocked
+            const isBlocked = blockedHistory.has(alert.source_ip);
 
             return (
               <div key={alert.id} className={`alert-row ${config.bg} mb-2 p-3 rounded flex items-center justify-between`}>
@@ -116,16 +113,21 @@ export default function LiveAlertFeed() {
                   </div>
                 </div>
                 
-                {/* Block Button */}
-                <button 
-                  onClick={() => handleBlockIp(alert.source_ip)}
-                  disabled={blockingIp === alert.source_ip}
-                  className="ml-4 px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded shadow flex items-center gap-1 transition-colors disabled:opacity-50"
-                  title="Block Source IP"
-                >
-                  <FaBan />
-                  {blockingIp === alert.source_ip ? '...' : 'Block'}
-                </button>
+                {/* NEW: Conditional Button Rendering */}
+                {isBlocked ? (
+                  <button disabled className="ml-4 px-3 py-1 bg-gray-400 text-white text-xs font-bold rounded shadow flex items-center gap-1 cursor-not-allowed">
+                    <FaCheckCircle /> Blocked
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => handleBlockIp(alert.source_ip)}
+                    disabled={blockingIp === alert.source_ip}
+                    className="ml-4 px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded shadow flex items-center gap-1 transition-colors disabled:opacity-50"
+                  >
+                    <FaBan />
+                    {blockingIp === alert.source_ip ? '...' : 'Block'}
+                  </button>
+                )}
               </div>
             );
           })
