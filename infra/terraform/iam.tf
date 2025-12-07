@@ -112,9 +112,9 @@ resource "google_service_account_iam_member" "dashboard_sa_token_creator" {
 # -----------------------------------------------------------------
 #  GRANT PERMISSIONS FOR CLOUD ARMOR (Active Response)
 # -----------------------------------------------------------------
-# Allows the API to add/remove IPs from the Address Group
-resource "google_project_iam_member" "api_sa_network_security" {
+# "Security Admin" allows the API to update Security Policy Rules directly.
+resource "google_project_iam_member" "api_sa_security_admin" {
   project = var.project_id
-  role    = "roles/networksecurity.admin"
+  role    = "roles/compute.securityAdmin"
   member  = google_service_account.api_sa.member
 }

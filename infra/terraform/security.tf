@@ -3,6 +3,8 @@
 # ==============================================================================
 # This is the resource our Python API will populate.
 # It allows up to 100,000 IPs, unlike standard Security Policy rules.
+
+# 1. The Address Group (Database of Blocked IPs)
 resource "google_network_security_address_group" "global_blocklist" {
   name        = "netprobe-global-blocklist"
   parent      = "projects/${var.project_id}"
@@ -12,29 +14,27 @@ resource "google_network_security_address_group" "global_blocklist" {
   description = "Dynamic Blocklist populated by NetProbe Active Defense"
 }
 
-# ==============================================================================
-# 2. CLOUD ARMOR SECURITY POLICY (The "Bouncer")
-# ==============================================================================
 resource "google_compute_security_policy" "api_security_policy" {
   name        = "netprobe-api-security-policy"
   description = "Public API policy with Active Defense (Cloud Armor)"
 
   # --- RULE 1: DYNAMIC BLOCKLIST (Highest Priority) ---
-  # FIX: Use 'config' block. Cloud Armor accepts Address Group IDs 
-  # directly in the src_ip_ranges list.
+  # The Python API will dynamically append IPs to 'src_ip_ranges' here.
   rule {
     action   = "deny(403)"
     priority = 500
     match {
       versioned_expr = "SRC_IPS_V1"
       config {
-        src_ip_ranges = [google_network_security_address_group.global_blocklist.id]
+        # Placeholder IP (TEST-NET-1) to initialize the list.
+        # Python will append real attacker IPs to this array.
+        src_ip_ranges = ["192.0.2.1/32"]
       }
     }
-    description = "Active Defense: Block specific attackers"
+    description = "Active Defense: Dynamic Blocklist"
   }
 
-  # --- RULE 2: ALLOW ADMINS (Safety Net) ---
+  # --- RULE 2: ALLOW ADMINS ---
   rule {
     action   = "allow"
     priority = 900
@@ -47,7 +47,7 @@ resource "google_compute_security_policy" "api_security_policy" {
     description = "Allow specific admin IPs"
   }
 
-  # --- RULE 3: DEFAULT ALLOW (Public Access) ---
+  # --- RULE 3: DEFAULT ALLOW (Public Access for Demo) ---
   rule {
     action   = "allow"
     priority = 2147483647
