@@ -1,92 +1,131 @@
 import { useEffect, useState } from 'react';
-import { FaExclamationTriangle } from 'react-icons/fa';
+import { FaExclamationTriangle, FaBan } from 'react-icons/fa';
 import axios from 'axios';
+import './LiveAlertFeed.css';
 
 // Define alert type
 interface Alert {
   id: string;
   ts: string;
-  severity: 'high' | 'medium' | 'low' | 'info';
+  severity: number | string;
   message: string;
   signature?: string;
+  source_ip: string; // Ensure this exists
 }
 
-// This is the new severityConfig object.
-// It uses numbers (1, 2, 3) as keys to match your database.
-const severityConfig = {
-  1: { // High Severity
-    icon: 'text-red-600',
-    bg: 'bg-red-50',
-    label: 'High Severity Alert'
-  },
-  2: { // Medium Severity
-    icon: 'text-orange-600',
-    bg: 'bg-orange-50',
-    label: 'Medium Severity Alert'
-  },
-  3: { // Low Severity
-    icon: 'text-yellow-600',
-    bg: 'bg-yellow-50',
-    label: 'Low Severity Alert'
-  }
+// Severity config (1=High, 2=Medium, 3=Low)
+const severityConfig: Record<number, { icon: string; bg: string; label: string }> = {
+  1: { icon: 'icon-high', bg: 'bg-high', label: 'High Severity Alert' },
+  2: { icon: 'icon-medium', bg: 'bg-medium', label: 'Medium Severity Alert' },
+  3: { icon: 'icon-low', bg: 'bg-low', label: 'Low Severity Alert' }
 };
 
 export default function LiveAlertFeed() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [blockingIp, setBlockingIp] = useState<string | null>(null);
+
+  // Function to handle blocking an IP
+  const handleBlockIp = async (ip: string) => {
+    if (!ip || ip === 'Unknown') {
+      alert("Cannot block: Invalid IP address");
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to block IP: ${ip}?`)) {
+      return;
+    }
+
+    setBlockingIp(ip);
+    try {
+      await axios.post('/api/v1/actions/block-ip', {
+        ip: ip,
+        reason: 'Blocked via Live Alert Feed',
+        user: 'current-user' // Replace with auth context if you have it
+      });
+      alert(`Success: IP ${ip} has been blocked.`);
+    } catch (err: any) {
+      console.error('Block IP failed', err);
+      const errMsg = err.response?.data?.error || err.message;
+      alert(`Failed to block IP: ${errMsg}`);
+    } finally {
+      setBlockingIp(null);
+    }
+  };
 
   // Fetch alerts from Flask API
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
-       const res = await axios.get('/api/v1/logs/alerts'); // Use the new v1 path
-        // Normalize backend data if necessary
-        const data = (res.data.logs as any[]).map((item, i) => ({
-          id: item.id || i.toString(),
-          ts: item.ts || '',
-          severity: item.severity || 'info',
-          message: item.signature || item.message || 'No details available',
-        }));
-        setAlerts(data);
+        const res = await axios.get('/api/v1/logs/alerts');
+        const raw = res.data && (res.data.logs ?? res.data);
+        const arr = Array.isArray(raw) ? raw : [];
+
+        const data = arr.map((item: any, i: number) => ({
+          id: item.id?.toString() ?? i.toString(),
+          ts: item.created_at ?? item.ts ?? item.time ?? '',
+          severity: (() => {
+            const s = item.severity ?? item.sev ?? item.level;
+            const n = Number(s);
+            return Number.isFinite(n) && (n === 1 || n === 2 || n === 3) ? n : 3;
+          })(),
+          message: item.signature ?? item.message ?? 'No details available',
+          signature: item.signature,
+          // Robustly attempt to find the source IP field
+          source_ip: item.source_ip ?? item.src_ip ?? item.ip ?? 'Unknown' 
+        })) as Alert[];
+
+        setAlerts(data.slice(0, 20));
       } catch (err) {
         console.error('Error fetching alerts:', err);
+        setAlerts([]);
       }
     };
 
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 5000); // refresh every 5s
+    const interval = setInterval(fetchAlerts, 5000);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <div className="border-2 border-gray-900 rounded-lg bg-white h-full">
+    <div className="border-2 border-gray-900 rounded-lg bg-white h-full flex flex-col">
       <div className="border-b-2 border-gray-900 px-6 py-4">
         <h2 className="text-xl font-bold">Live Alert Feed</h2>
       </div>
-      <div className="divide-y-2 divide-gray-900">
+
+      <div className="alert-feed-container flex-1 overflow-y-auto p-2">
         {alerts.length === 0 ? (
           <div className="px-6 py-8 text-center text-gray-500">
             No alerts at this time
           </div>
         ) : (
           alerts.map((alert) => {
-  // This line correctly looks for a number (1, 2, or 3)
-  // and defaults to 3 if it finds anything else.
-  const config = severityConfig[alert.severity as 1 | 2 | 3] || severityConfig[3];
+            const sev = Number(alert.severity) || 3;
+            const config = severityConfig[sev] ?? severityConfig[3];
 
-  return (
-    <div
-      key={alert.id}
-      // This line (79) will now work because 'config' will always be defined
-      className={`px-6 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors ${config.bg}`}
-    
-//...
-              >
-                <FaExclamationTriangle className={`w-6 h-6 ${config.icon}`} />
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">{config.label}</p>
-                  <p className="text-sm text-gray-600 mt-1">{alert.message}</p>
-                  <p className="text-xs text-gray-500 mt-1">{alert.ts}</p>
+            return (
+              <div key={alert.id} className={`alert-row ${config.bg} mb-2 p-3 rounded flex items-center justify-between`}>
+                <div className="flex items-center gap-3">
+                  <FaExclamationTriangle className={`alert-icon ${config.icon} text-lg`} />
+                  <div className="alert-text">
+                    <p className="alert-title font-bold text-sm">{config.label}</p>
+                    <p className="alert-message text-sm">{alert.message}</p>
+                    <div className="flex gap-2 text-xs text-gray-600 mt-1">
+                      {alert.ts && <span>{alert.ts}</span>}
+                      {alert.source_ip && <span className="font-mono bg-gray-200 px-1 rounded">Src: {alert.source_ip}</span>}
+                    </div>
+                  </div>
                 </div>
+                
+                {/* Block Button */}
+                <button 
+                  onClick={() => handleBlockIp(alert.source_ip)}
+                  disabled={blockingIp === alert.source_ip}
+                  className="ml-4 px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded shadow flex items-center gap-1 transition-colors disabled:opacity-50"
+                  title="Block Source IP"
+                >
+                  <FaBan />
+                  {blockingIp === alert.source_ip ? '...' : 'Block'}
+                </button>
               </div>
             );
           })

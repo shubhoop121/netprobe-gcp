@@ -139,3 +139,14 @@
 .switch-btn:hover {
   background-color: #d1d5db;
 }
+
+.login-logo-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.login-logo {
+  height: 80px;
+  object-fit: contain;
+}

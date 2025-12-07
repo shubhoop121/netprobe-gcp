@@ -67,6 +67,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   return (
     <div className="login-container">
+      <div className="login-logo-container">
+        <img src="/netprobe-icon.png" alt="NetProbe Logo" className="login-logo" />
+      </div>
       <div className="login-card">
         <div className="login-header">
           <h1>
