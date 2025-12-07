@@ -30,10 +30,25 @@ if ! grep -q "^@load packages" $ZEEK_SITE/local.zeek; then
     echo "@load packages" | sudo tee -a $ZEEK_SITE/local.zeek
 fi
 
+# --- Install mDNS Support ---
 echo "--- Installing mDNS Support ---"
+
+# Check if already installed to prevent loop errors
 if ! sudo /opt/zeek/bin/zkg list | grep -q "mdns"; then
-    sudo /opt/zeek/bin/zkg install zeek/zeek-spec/mdns --force || echo "mDNS package install skipped/failed, relying on native support."
+    echo "Installing mDNS plugin from zeek-plugins/mdns..."
+    sudo /opt/zeek/bin/zkg install https://github.com/zeek-plugins/mdns --force --skiptests
 fi
+
+# Explicitly load the package
+if ! grep -q "mdns" $ZEEK_SITE/local.zeek; then
+    # We check if the package actually installed successfully before loading
+    if sudo /opt/zeek/bin/zkg list | grep -q "mdns"; then
+        echo "@load mdns" | sudo tee -a $ZEEK_SITE/local.zeek
+    else
+        echo "WARNING: mDNS package failed to install. Skipping load to prevent crash."
+    fi
+fi
+# ------------------------------------------------------
 
 echo "--- Restarting Zeek and Suricata ---"
 sudo /opt/zeek/bin/zeekctl deploy
