@@ -31,7 +31,7 @@ resource "google_compute_backend_service" "dashboard_backend" {
   protocol    = "HTTPS" # Changed to HTTPS as it's standard for Serverless NEGs internally
   load_balancing_scheme = "EXTERNAL_MANAGED"
   backend { group = google_compute_region_network_endpoint_group.dashboard_neg.id }
-  security_policy = google_compute_security_policy.main.id
+  security_policy = google_compute_security_policy.api_security_policy.id
 }
 
 resource "google_compute_backend_service" "api_backend" {
@@ -40,7 +40,7 @@ resource "google_compute_backend_service" "api_backend" {
   protocol    = "HTTPS"
   load_balancing_scheme = "EXTERNAL_MANAGED"
   backend { group = google_compute_region_network_endpoint_group.api_neg.id }
-  security_policy = google_compute_security_policy.main.id
+  security_policy = google_compute_security_policy.api_security_policy.id
 }
 
 # 4. URL Map
