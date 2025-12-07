@@ -84,5 +84,4 @@ def block_ip_in_armor(ip_address):
 
     except Exception as e:
         logger.error(f"Cloud Armor Rule Update Failed: {e}", exc_info=True)
-        # Re-raise so the API returns 500
         raise e
