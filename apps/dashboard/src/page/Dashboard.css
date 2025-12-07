@@ -132,3 +132,14 @@
     grid-template-rows: auto auto; /* allow flexible height */
   }
 }
+
+.dashboard-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.netprobe-logo {
+  height: 55px;      /* adjust based on look */
+  object-fit: contain;
+}

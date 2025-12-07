@@ -12,21 +12,24 @@ export default function Dashboard({ onLogout, dbStatus }: DashboardProps) {
   return (
     <div className="dashboard-container">
       <header className="dashboard-header">
-        <h1 className="dashboard-title">NetProbe Security Dashboard</h1>
+        <div className="dashboard-header-left">
+          <img
+            src="/netprobe-icon.png"
+            alt="NetProbe Logo"
+            className="netprobe-logo"
+          />
+          <h1 className="dashboard-title">NetProbe Security Dashboard</h1>
+        </div>
+
         <div className="dashboard-status">
           <div className="status-indicator">
-            <span
-              className={`status-dot ${
-                dbStatus.includes('Fail') ? 'status-fail' : 'status-ok'
-              }`}
-            ></span>
+            <span className={`status-dot ${dbStatus.includes('Fail') ? 'status-fail' : 'status-ok'}`}></span>
             <span>{dbStatus}</span>
           </div>
-          <button className="logout-btn" onClick={onLogout}>
-            Logout
-          </button>
+          <button className="logout-btn" onClick={onLogout}>Logout</button>
         </div>
       </header>
+
 
       <div className="dashboard-grid">
   
