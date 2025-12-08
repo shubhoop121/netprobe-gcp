@@ -36,5 +36,5 @@ variable "app_version" {
 variable "allowed_source_ranges" {
   description = "List of admin IPs allowed to bypass the blocklist (e.g., your home IP/Cloud Shell)"
   type        = list(string)
-  default     = ["0.0.0.0/0", "35.247.137.215/32"] # Default to allow all for the demo to prevent errors
+  default     = ["0.0.0.0/0", "35.187.232.99/32"] # Default to allow all for the demo to prevent errors
 }
